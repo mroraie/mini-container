@@ -1,0 +1,38 @@
+# Compiled executables
+mini-container
+mini-container-ui
+*.exe
+
+# Object files
+*.o
+src/*.o
+
+# Build artifacts
+*.out
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*~
+*.tmp
+*.bak
+
+# Log files
+*.log
+
+# Container runtime files
+/tmp/container_*
+/tmp/mini_container*
