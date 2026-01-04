@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  mini-container:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mini-container-system
+    stdin_open: true
+    tty: true
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /tmp:/tmp:rw
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+      - seccomp:unconfined
+    tmpfs:
+      - /tmp:exec,size=100m
+    command: ["bash"]
+    networks:
+      - container-net
+
+  # Optional: Development environment
+  mini-container-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mini-container-dev
+    stdin_open: true
+    tty: true
+    privileged: true
+    volumes:
+      - .:/app
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+      - seccomp:unconfined
+    command: ["bash"]
+    networks:
+      - container-net
+    profiles:
+      - dev
+
+networks:
+  container-net:
+    driver: bridge

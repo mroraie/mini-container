@@ -1,0 +1,36 @@
+# Git files
+.git
+.gitignore
+
+# Build artifacts
+*.o
+mini-container
+mini-container-ui
+*.exe
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation (keep in container for reference)
+# docs/
+
+# Temporary files
+*~
+*.tmp
+*.bak
+*.log
+
+# Node modules (if any)
+node_modules/
+
+# Docker files (don't copy into themselves)
+Dockerfile
+docker-compose.yml
+.dockerignore
