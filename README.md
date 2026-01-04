@@ -38,12 +38,47 @@
 
 ## پیش‌نیازها
 
+### پیش‌نیازهای محلی
+
 - **هسته لینوکس**: ۳.۸+ (برای پشتیبانی فضای نام)
 - **کامپایلر سی‌پلاس‌پلاس**: GCC (g++) یا سازگار با پشتیبانی C++11
 - **دسترسی روت**: برای عملیات کانتینر ضروری است
 - **Cgroups**: در `/sys/fs/cgroup` mount شده
 
+### پیش‌نیازهای Docker (برای VPS)
+
+- **Docker**: ۲۰.۱۰+
+- **Docker Compose**: ۱.۲۹+
+- **سیستم عامل**: لینوکس با هسته ۳.۸+
+- **امتیازات sudo**: برای اجرای کانتینرهای privileged
+
+#### نصب Docker روی VPS
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install -y docker.io docker-compose
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker $USER
+```
+
+**CentOS/RHEL:**
+```bash
+sudo yum install -y docker docker-compose
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker $USER
+```
+
+**با Docker Desktop:**
+```bash
+# دانلود و نصب از https://docker.com
+```
+
 ## ساخت
+
+### ساخت محلی
 
 ```bash
 # Clone یا به دایرکتوری پروژه بروید
@@ -57,6 +92,39 @@ make ui
 
 # اختیاری: نصب در کل سیستم
 sudo make install
+```
+
+### استقرار با Docker (توصیه شده برای VPS)
+
+```bash
+# Clone کردن پروژه
+git clone https://github.com/mroraie/mini-container.git
+cd mini-container
+
+# اجرای اسکریپت استقرار خودکار
+./deploy.sh
+
+# یا برای محیط توسعه (با mount کردن فایل‌ها)
+./deploy-dev.sh
+```
+
+#### دستورات Docker دستی
+
+```bash
+# ساخت و اجرای کانتینر
+docker-compose up --build
+
+# اجرای در پس‌زمینه
+docker-compose up --build -d
+
+# اتصال به کانتینر در حال اجرا
+docker-compose exec mini-container bash
+
+# مشاهده لاگ‌ها
+docker-compose logs -f
+
+# متوقف کردن کانتینر
+docker-compose down
 ```
 
 ## استفاده
@@ -152,13 +220,19 @@ mini-container/
 │   ├── container_manager.cpp # چرخه حیات کانتینر
 │   ├── namespace_handler.cpp # عملیات فضای نام
 │   ├── resource_manager.cpp  # مدیریت Cgroup
-│   └── filesystem_manager.cpp # ایزولاسیون فایل‌سیستم
+│   ├── filesystem_manager.cpp # ایزولاسیون فایل‌سیستم
+│   └── terminal_ui.cpp   # رابط گرافیکی ترمینال
 ├── include/               # فایل‌های سرآیند
 ├── tests/                 # اسکریپت‌های تست
 ├── examples/              # مثال‌های استفاده
 ├── docs/                  # مستندات
-├── Makefile              # سیستم ساخت
-└── README.md             # این فایل
+├── Dockerfile            # تنظیمات Docker
+├── docker-compose.yml    # تنظیمات Docker Compose
+├── deploy.sh            # اسکریپت استقرار
+├── deploy-dev.sh        # اسکریپت استقرار توسعه
+├── .dockerignore        # فایل‌های نادیده گرفته شده Docker
+├── Makefile             # سیستم ساخت
+└── README.md            # این فایل
 ```
 
 ## تست
@@ -185,6 +259,57 @@ mini-container/
 - **هسته مشترک**: همه کانتینرها هسته میزبان را به اشتراک می‌گذارند
 - **ایزولاسیون فضای نام**: ایزولاسیون سطح فرایند فراهم می‌کند
 - **محدودیت منابع**: از طریق cgroups اعمال می‌شود
+
+## تنظیمات Docker
+
+### پیکربندی امنیتی
+
+کانتینر Docker با امتیازات زیر اجرا می‌شود:
+- `--privileged`: دسترسی کامل به دستگاه میزبان
+- `--cap-add SYS_ADMIN`: قابلیت مدیریت سیستم
+- `--cap-add NET_ADMIN`: قابلیت مدیریت شبکه
+- `--security-opt apparmor:unconfined`: غیرفعال کردن AppArmor
+- `--security-opt seccomp:unconfined`: غیرفعال کردن Seccomp
+
+### Mount های ضروری
+
+```yaml
+volumes:
+  - /sys/fs/cgroup:/sys/fs/cgroup:rw  # برای cgroups
+  - /tmp:/tmp:rw                      # برای فایل‌های موقت
+```
+
+### عیب‌یابی Docker
+
+#### مشکل: کانتینر شروع نمی‌شود
+```bash
+# بررسی وضعیت Docker
+sudo systemctl status docker
+
+# بررسی لاگ‌های Docker
+sudo journalctl -u docker -f
+
+# بررسی لاگ‌های کانتینر
+docker-compose logs
+```
+
+#### مشکل: خطای دسترسی denied
+```bash
+# اضافه کردن کاربر به گروه docker
+sudo usermod -aG docker $USER
+
+# راه‌اندازی مجدد ترمینال یا اجرای:
+newgrp docker
+```
+
+#### مشکل: هسته قدیمی
+```bash
+# بررسی نسخه هسته
+uname -r
+
+# برای Ubuntu - ارتقا هسته
+sudo apt update && sudo apt install linux-generic-hwe-22.04
+```
 
 ## محدودیت‌ها
 
