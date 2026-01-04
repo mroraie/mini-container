@@ -1,0 +1,38 @@
+#ifndef FILESYSTEM_MANAGER_HPP
+#define FILESYSTEM_MANAGER_HPP
+
+typedef enum {
+    FS_CHROOT,      // Use chroot() for simple isolation
+    FS_PIVOT_ROOT   // Use pivot_root() for advanced isolation
+} fs_isolation_method_t;
+
+typedef struct {
+    char *root_path;            // Path to container root filesystem
+    fs_isolation_method_t method; // Isolation method to use
+    int create_minimal_fs;      // Whether to create minimal filesystem
+} fs_config_t;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void fs_config_init(fs_config_t *config);
+
+int fs_create_minimal_root(const char *root_path);
+
+int fs_setup_chroot(const char *root_path);
+
+int fs_setup_pivot_root(const char *new_root, const char *put_old);
+
+int fs_mount_container_filesystems(const char *root_path);
+
+int fs_populate_container_root(const char *root_path, const char *host_root);
+
+int fs_cleanup_container_root(const char *root_path);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* FILESYSTEM_MANAGER_HPP */
+
