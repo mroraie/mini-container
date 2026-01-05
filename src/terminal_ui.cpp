@@ -53,7 +53,7 @@ private:
 
     void drawHeader() {
         std::cout << "+==============================================================================+\n";
-        std::cout << "|                          سیستم مینی کانتینر                               |\n";
+        std::cout << "|                          Mini Container System                             |\n";
         std::cout << "|                              Mini Container System                          |\n";
         std::cout << "+==============================================================================+\n";
         std::cout << "\n";
@@ -65,24 +65,24 @@ private:
 
         switch(container.state) {
             case CONTAINER_CREATED:
-                state_str = "ایجاد شده";
+                state_str = "Created";
                 state_symbol = "[C]";
                 break;
             case CONTAINER_RUNNING:
-                state_str = "در حال اجرا";
+                state_str = "Running";
                 state_symbol = "[R]";
                 break;
             case CONTAINER_STOPPED:
-                state_str = "متوقف شده";
+                state_str = "Stopped";
                 state_symbol = "[S]";
                 break;
             case CONTAINER_DESTROYED:
-                state_str = "نابود شده";
+                state_str = "Destroyed";
                 state_symbol = "[D]";
                 break;
         }
 
-        std::cout << "+--- کانتینر " << std::setw(2) << index + 1 << " ";
+        std::cout << "+--- Container " << std::setw(2) << index + 1 << " ";
         std::cout << std::string(60, '-') << "+\n";
         std::cout << "| ID: " << std::left << std::setw(30) << container.id;
         std::cout << "وضعیت: " << state_symbol << " " << state_str << std::string(15, ' ') << "|\n";
@@ -106,7 +106,7 @@ private:
     void drawContainers() {
         if (containers.empty()) {
             std::cout << "+" << std::string(72, '-') << "+\n";
-            std::cout << "| هیچ کانتینری وجود ندارد                                      |\n";
+            std::cout << "| No containers exist                                          |\n";
             std::cout << "+" << std::string(72, '-') << "+\n\n";
             return;
         }
@@ -118,14 +118,14 @@ private:
     }
 
     void drawMenu() {
-        std::cout << "+======================================= منو ========================================+\n";
-        std::cout << "| 1. ایجاد کانتینر جدید                | 2. شروع کانتینر                         |\n";
-        std::cout << "| 3. توقف کانتینر                      | 4. نابودی کانتینر                       |\n";
-        std::cout << "| 5. نمایش اطلاعات کانتینر             | 6. لیست همه کانتینرها                   |\n";
-        std::cout << "| 7. اجرای دستور در کانتینر            | 8. به‌روزرسانی نمایش                    |\n";
-        std::cout << "| 0. خروج                               |                                         |\n";
+        std::cout << "+======================================= MENU ========================================+\n";
+        std::cout << "| 1. Create new container               | 2. Start container                       |\n";
+        std::cout << "| 3. Stop container                     | 4. Destroy container                     |\n";
+        std::cout << "| 5. Show container info                | 6. List all containers                   |\n";
+        std::cout << "| 7. Execute command in container       | 8. Refresh display                       |\n";
+        std::cout << "| 0. Exit                               |                                         |\n";
         std::cout << "+==================================================================================+\n";
-        std::cout << "\nانتخاب شما: ";
+        std::cout << "\nYour choice: ";
     }
 
     void createContainerDemo() {
@@ -156,32 +156,32 @@ private:
 #endif
             ContainerDisplay display = {container_id, CONTAINER_CREATED, 0, time(nullptr), 0, 0, 0};
             containers.push_back(display);
-            std::cout << "✅ کانتینر " << container_id << " ایجاد شد!\n";
+            std::cout << "✅ Container " << container_id << " created successfully!\n";
 #ifndef _WIN32
         } else {
-            std::cout << "❌ خطا در ایجاد کانتینر!\n";
+            std::cout << "❌ Error creating container!\n";
         }
 #endif
 
-        std::cout << "برای ادامه Enter را فشار دهید...";
+        std::cout << "Press Enter to continue...";
         std::cin.ignore();
         std::cin.get();
     }
 
     void startContainerDemo() {
         if (containers.empty()) {
-            std::cout << "❌ هیچ کانتینری وجود ندارد!\n";
+            std::cout << "❌ No containers exist!\n";
             std::cin.ignore();
             std::cin.get();
             return;
         }
 
-        std::cout << "شماره کانتینر برای شروع (1-" << containers.size() << "): ";
+        std::cout << "Select container to start (1-" << containers.size() << "): ";
         int index;
         std::cin >> index;
 
         if (index < 1 || index > (int)containers.size()) {
-            std::cout << "❌ شماره نامعتبر!\n";
+            std::cout << "❌ Invalid number!\n";
             std::cin.ignore();
             std::cin.get();
             return;
@@ -214,10 +214,10 @@ private:
             containers[index-1].state = CONTAINER_RUNNING;
             containers[index-1].started_at = time(nullptr);
             containers[index-1].pid = rand() % 10000 + 1000;
-            std::cout << "✅ کانتینر " << container_id << " شروع شد!\n";
+            std::cout << "✅ Container " << container_id << " started successfully!\n";
 #ifndef _WIN32
         } else {
-            std::cout << "❌ خطا در شروع کانتینر!\n";
+            std::cout << "❌ Error starting container!\n";
         }
 #endif
 
@@ -227,18 +227,18 @@ private:
 
     void stopContainerDemo() {
         if (containers.empty()) {
-            std::cout << "❌ هیچ کانتینری وجود ندارد!\n";
+            std::cout << "❌ No containers exist!\n";
             std::cin.ignore();
             std::cin.get();
             return;
         }
 
-        std::cout << "شماره کانتینر برای توقف (1-" << containers.size() << "): ";
+        std::cout << "Select container to stop (1-" << containers.size() << "): ";
         int index;
         std::cin >> index;
 
         if (index < 1 || index > (int)containers.size()) {
-            std::cout << "❌ شماره نامعتبر!\n";
+            std::cout << "❌ Invalid number!\n";
             std::cin.ignore();
             std::cin.get();
             return;
@@ -249,10 +249,10 @@ private:
         if (container_manager_stop(&cm, container_id.c_str()) == 0) {
 #endif
             containers[index-1].state = CONTAINER_STOPPED;
-            std::cout << "✅ کانتینر " << container_id << " متوقف شد!\n";
+            std::cout << "✅ Container " << container_id << " stopped successfully!\n";
 #ifndef _WIN32
         } else {
-            std::cout << "❌ خطا در توقف کانتینر!\n";
+            std::cout << "❌ Error stopping container!\n";
         }
 #endif
 
@@ -262,18 +262,18 @@ private:
 
     void destroyContainerDemo() {
         if (containers.empty()) {
-            std::cout << "❌ هیچ کانتینری وجود ندارد!\n";
+            std::cout << "❌ No containers exist!\n";
             std::cin.ignore();
             std::cin.get();
             return;
         }
 
-        std::cout << "شماره کانتینر برای نابودی (1-" << containers.size() << "): ";
+        std::cout << "Select container to destroy (1-" << containers.size() << "): ";
         int index;
         std::cin >> index;
 
         if (index < 1 || index > (int)containers.size()) {
-            std::cout << "❌ شماره نامعتبر!\n";
+            std::cout << "❌ Invalid number!\n";
             std::cin.ignore();
             std::cin.get();
             return;
@@ -284,10 +284,10 @@ private:
         if (container_manager_destroy(&cm, container_id.c_str()) == 0) {
 #endif
             containers[index-1].state = CONTAINER_DESTROYED;
-            std::cout << "✅ کانتینر " << container_id << " نابود شد!\n";
+            std::cout << "✅ Container " << container_id << " destroyed successfully!\n";
 #ifndef _WIN32
         } else {
-            std::cout << "❌ خطا در نابودی کانتینر!\n";
+            std::cout << "❌ Error destroying container!\n";
         }
 #endif
 
@@ -309,7 +309,7 @@ public:
         srand(time(nullptr));
 #ifndef _WIN32
         if (container_manager_init(&cm, 10) != 0) {
-            std::cerr << "خطا در مقداردهی اولیه مدیریت‌کننده کانتینر!\n";
+            std::cerr << "Error initializing container manager!\n";
             exit(1);
         }
 #endif
@@ -352,7 +352,7 @@ public:
                     break;
                 case 7:
                     // Execute command - would need more implementation
-                    std::cout << "این ویژگی هنوز پیاده‌سازی نشده!\n";
+                    std::cout << "This feature is not yet implemented!\n";
                     std::cin.ignore();
                     std::cin.get();
                     break;
@@ -363,7 +363,7 @@ public:
                     running = false;
                     break;
                 default:
-                    std::cout << "انتخاب نامعتبر!\n";
+                    std::cout << "Invalid choice!\n";
                     std::cin.ignore();
                     std::cin.get();
                     break;
@@ -373,11 +373,9 @@ public:
 };
 
 int main() {
-    setlocale(LC_ALL, "fa_IR.UTF-8");
-
     TerminalUI ui;
     ui.run();
 
-    std::cout << "\nخداحافظ! 👋\n";
+    std::cout << "\nGoodbye! 👋\n";
     return 0;
 }
