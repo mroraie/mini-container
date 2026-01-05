@@ -227,6 +227,7 @@ int container_manager_exec(container_manager_t *cm,
                           const char *container_id,
                           char **command,
                           int argc) {
+    (void)argc;  // Suppress unused parameter warning
     container_info_t *info = find_container(cm, container_id);
     if (!info) {
         fprintf(stderr, "Error: container %s not found\n", container_id);

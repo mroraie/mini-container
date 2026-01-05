@@ -44,6 +44,7 @@ int namespace_set_hostname(const char *hostname) {
 }
 
 static int setup_container_filesystem(const namespace_config_t *config) {
+    (void)config;  // Suppress unused parameter warning
     if (mount("proc", "/proc", "proc", 0, nullptr) == -1) {
         perror("mount proc failed");
         return -1;
