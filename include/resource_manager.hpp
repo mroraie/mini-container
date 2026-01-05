@@ -25,9 +25,15 @@ typedef struct {
     int enabled;
 } resource_limits_t;
 
+typedef enum {
+    CGROUP_V1,
+    CGROUP_V2
+} cgroup_version_t;
+
 typedef struct resource_manager {
     char *cgroup_path;
     int initialized;
+    cgroup_version_t version;
 } resource_manager_t;
 
 #ifdef __cplusplus

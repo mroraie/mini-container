@@ -13,11 +13,24 @@
 using namespace std;
 
 #define CGROUP_ROOT "/sys/fs/cgroup"
+#define CGROUP_V2_CONTROLLERS CGROUP_ROOT "/cgroup.controllers"
 
 #define CPU_CGROUP_PATH CGROUP_ROOT "/cpu"
 #define MEMORY_CGROUP_PATH CGROUP_ROOT "/memory"
 
 #define BUF_SIZE 256
+
+static cgroup_version_t detect_cgroup_version() {
+    // Check for cgroup2 first (unified hierarchy)
+    if (access(CGROUP_V2_CONTROLLERS, F_OK) == 0) {
+        return CGROUP_V2;
+    }
+    // Fall back to cgroup v1
+    if (access(CPU_CGROUP_PATH, F_OK) == 0 && access(MEMORY_CGROUP_PATH, F_OK) == 0) {
+        return CGROUP_V1;
+    }
+    return CGROUP_V1; // Default fallback
+}
 
 static int write_file(const char *path, const char *value) {
     int fd = open(path, O_WRONLY);
@@ -59,27 +72,58 @@ static int read_file(const char *path, char *buffer, size_t size) {
 static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
                          const cpu_limits_t *limits) {
     char path[BUF_SIZE];
-    char value[32];
+    char value[64];
 
-    if (limits->shares > 0) {
-        snprintf(path, sizeof(path), "%s/%s_%s/cpu.shares", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-        snprintf(value, sizeof(value), "%d", limits->shares);
-        if (write_file(path, value) != 0) {
-            return -1;
+    if (rm->version == CGROUP_V2) {
+        // cgroup2 uses cpu.max format: "quota period" or "max" for unlimited
+        if (limits->quota_us > 0) {
+            int period_us = limits->period_us > 0 ? limits->period_us : 100000;
+            snprintf(path, sizeof(path), "%s/%s_%s/cpu.max", CGROUP_ROOT, rm->cgroup_path, container_id);
+            snprintf(value, sizeof(value), "%d %d", limits->quota_us, period_us);
+            if (write_file(path, value) != 0) {
+                return -1;
+            }
+        } else {
+            // Unlimited CPU
+            snprintf(path, sizeof(path), "%s/%s_%s/cpu.max", CGROUP_ROOT, rm->cgroup_path, container_id);
+            if (write_file(path, "max") != 0) {
+                return -1;
+            }
         }
-    }
-
-    if (limits->quota_us > 0) {
-        snprintf(path, sizeof(path), "%s/%s_%s/cpu.cfs_quota_us", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-        snprintf(value, sizeof(value), "%d", limits->quota_us);
-        if (write_file(path, value) != 0) {
-            return -1;
+        // Note: cpu.weight (similar to shares) can be set, but we'll focus on quota for now
+        if (limits->shares > 0) {
+            // Convert shares to weight (cgroup2 uses weight, typically 1-10000)
+            int weight = (limits->shares * 100) / 1024;
+            if (weight < 1) weight = 1;
+            if (weight > 10000) weight = 10000;
+            snprintf(path, sizeof(path), "%s/%s_%s/cpu.weight", CGROUP_ROOT, rm->cgroup_path, container_id);
+            snprintf(value, sizeof(value), "%d", weight);
+            if (write_file(path, value) != 0) {
+                return -1;
+            }
+        }
+    } else {
+        // cgroup v1
+        if (limits->shares > 0) {
+            snprintf(path, sizeof(path), "%s/%s_%s/cpu.shares", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+            snprintf(value, sizeof(value), "%d", limits->shares);
+            if (write_file(path, value) != 0) {
+                return -1;
+            }
         }
 
-        snprintf(path, sizeof(path), "%s/%s_%s/cpu.cfs_period_us", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-        snprintf(value, sizeof(value), "%d", limits->period_us > 0 ? limits->period_us : 100000);
-        if (write_file(path, value) != 0) {
-            return -1;
+        if (limits->quota_us > 0) {
+            snprintf(path, sizeof(path), "%s/%s_%s/cpu.cfs_quota_us", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+            snprintf(value, sizeof(value), "%d", limits->quota_us);
+            if (write_file(path, value) != 0) {
+                return -1;
+            }
+
+            snprintf(path, sizeof(path), "%s/%s_%s/cpu.cfs_period_us", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+            snprintf(value, sizeof(value), "%d", limits->period_us > 0 ? limits->period_us : 100000);
+            if (write_file(path, value) != 0) {
+                return -1;
+            }
         }
     }
 
@@ -89,21 +133,48 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
 static int set_memory_limits(resource_manager_t *rm, const char *container_id,
                            const memory_limits_t *limits) {
     char path[BUF_SIZE];
-    char value[32];
+    char value[64];
 
-    if (limits->limit_bytes > 0) {
-        snprintf(path, sizeof(path), "%s/%s_%s/memory.limit_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
-        snprintf(value, sizeof(value), "%lu", limits->limit_bytes);
-        if (write_file(path, value) != 0) {
-            return -1;
+    if (rm->version == CGROUP_V2) {
+        // cgroup2 uses memory.max
+        if (limits->limit_bytes > 0) {
+            snprintf(path, sizeof(path), "%s/%s_%s/memory.max", CGROUP_ROOT, rm->cgroup_path, container_id);
+            snprintf(value, sizeof(value), "%lu", limits->limit_bytes);
+            if (write_file(path, value) != 0) {
+                return -1;
+            }
+        } else {
+            // Unlimited memory
+            snprintf(path, sizeof(path), "%s/%s_%s/memory.max", CGROUP_ROOT, rm->cgroup_path, container_id);
+            if (write_file(path, "max") != 0) {
+                return -1;
+            }
         }
-    }
 
-    if (limits->swap_limit_bytes > 0) {
-        snprintf(path, sizeof(path), "%s/%s_%s/memory.memsw.limit_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
-        snprintf(value, sizeof(value), "%lu", limits->swap_limit_bytes);
-        if (write_file(path, value) != 0) {
-            return -1;
+        // cgroup2 uses memory.swap.max for swap limits
+        if (limits->swap_limit_bytes > 0) {
+            snprintf(path, sizeof(path), "%s/%s_%s/memory.swap.max", CGROUP_ROOT, rm->cgroup_path, container_id);
+            snprintf(value, sizeof(value), "%lu", limits->swap_limit_bytes);
+            if (write_file(path, value) != 0) {
+                return -1;
+            }
+        }
+    } else {
+        // cgroup v1
+        if (limits->limit_bytes > 0) {
+            snprintf(path, sizeof(path), "%s/%s_%s/memory.limit_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
+            snprintf(value, sizeof(value), "%lu", limits->limit_bytes);
+            if (write_file(path, value) != 0) {
+                return -1;
+            }
+        }
+
+        if (limits->swap_limit_bytes > 0) {
+            snprintf(path, sizeof(path), "%s/%s_%s/memory.memsw.limit_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
+            snprintf(value, sizeof(value), "%lu", limits->swap_limit_bytes);
+            if (write_file(path, value) != 0) {
+                return -1;
+            }
         }
     }
 
@@ -121,14 +192,36 @@ int resource_manager_init(resource_manager_t *rm, const char *base_path) {
         return -1;
     }
 
-    if (access(CPU_CGROUP_PATH, F_OK) != 0) {
-        fprintf(stderr, "Error: CPU cgroup subsystem not available\n");
-        return -1;
-    }
+    // Detect cgroup version
+    rm->version = detect_cgroup_version();
 
-    if (access(MEMORY_CGROUP_PATH, F_OK) != 0) {
-        fprintf(stderr, "Error: memory cgroup subsystem not available\n");
-        return -1;
+    if (rm->version == CGROUP_V2) {
+        // Check if cgroup2 controllers are available
+        char controllers_path[BUF_SIZE];
+        snprintf(controllers_path, sizeof(controllers_path), "%s/cgroup.controllers", CGROUP_ROOT);
+        if (access(controllers_path, F_OK) != 0) {
+            fprintf(stderr, "Error: cgroup2 controllers not available\n");
+            return -1;
+        }
+        // Verify CPU and memory controllers are enabled
+        char buffer[BUF_SIZE];
+        if (read_file(controllers_path, buffer, sizeof(buffer)) == 0) {
+            if (strstr(buffer, "cpu") == nullptr || strstr(buffer, "memory") == nullptr) {
+                fprintf(stderr, "Error: CPU or memory controllers not enabled in cgroup2\n");
+                return -1;
+            }
+        }
+    } else {
+        // cgroup v1 - check for CPU and memory subsystems
+        if (access(CPU_CGROUP_PATH, F_OK) != 0) {
+            fprintf(stderr, "Error: CPU cgroup subsystem not available\n");
+            return -1;
+        }
+
+        if (access(MEMORY_CGROUP_PATH, F_OK) != 0) {
+            fprintf(stderr, "Error: memory cgroup subsystem not available\n");
+            return -1;
+        }
     }
 
     rm->cgroup_path = strdup(base_path ? base_path : "mini_container");
@@ -150,16 +243,26 @@ int resource_manager_create_cgroup(resource_manager_t *rm,
 
     char path[BUF_SIZE];
 
-    snprintf(path, sizeof(path), "%s/%s_%s", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-    if (mkdir(path, 0755) == -1 && errno != EEXIST) {
-        perror("mkdir CPU cgroup failed");
-        return -1;
-    }
+    if (rm->version == CGROUP_V2) {
+        // cgroup2: create unified cgroup directory
+        snprintf(path, sizeof(path), "%s/%s_%s", CGROUP_ROOT, rm->cgroup_path, container_id);
+        if (mkdir(path, 0755) == -1 && errno != EEXIST) {
+            perror("mkdir cgroup2 directory failed");
+            return -1;
+        }
+    } else {
+        // cgroup v1: create separate directories for CPU and memory
+        snprintf(path, sizeof(path), "%s/%s_%s", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+        if (mkdir(path, 0755) == -1 && errno != EEXIST) {
+            perror("mkdir CPU cgroup failed");
+            return -1;
+        }
 
-    snprintf(path, sizeof(path), "%s/%s_%s", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
-    if (mkdir(path, 0755) == -1 && errno != EEXIST) {
-        perror("mkdir memory cgroup failed");
-        return -1;
+        snprintf(path, sizeof(path), "%s/%s_%s", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
+        if (mkdir(path, 0755) == -1 && errno != EEXIST) {
+            perror("mkdir memory cgroup failed");
+            return -1;
+        }
     }
 
     if (limits->enabled && limits->cpu.shares > 0) {
@@ -189,14 +292,23 @@ int resource_manager_add_process(resource_manager_t *rm,
 
     snprintf(pid_str, sizeof(pid_str), "%d", pid);
 
-    snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-    if (write_file(path, pid_str) != 0) {
-        return -1;
-    }
+    if (rm->version == CGROUP_V2) {
+        // cgroup2 uses cgroup.procs
+        snprintf(path, sizeof(path), "%s/%s_%s/cgroup.procs", CGROUP_ROOT, rm->cgroup_path, container_id);
+        if (write_file(path, pid_str) != 0) {
+            return -1;
+        }
+    } else {
+        // cgroup v1 uses tasks
+        snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+        if (write_file(path, pid_str) != 0) {
+            return -1;
+        }
 
-    snprintf(path, sizeof(path), "%s/%s_%s/tasks", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
-    if (write_file(path, pid_str) != 0) {
-        return -1;
+        snprintf(path, sizeof(path), "%s/%s_%s/tasks", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
+        if (write_file(path, pid_str) != 0) {
+            return -1;
+        }
     }
 
     return 0;
@@ -219,11 +331,16 @@ int resource_manager_destroy_cgroup(resource_manager_t *rm,
 
     char path[BUF_SIZE];
 
-    snprintf(path, sizeof(path), "%s/%s_%s", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-    rmdir(path);
+    if (rm->version == CGROUP_V2) {
+        snprintf(path, sizeof(path), "%s/%s_%s", CGROUP_ROOT, rm->cgroup_path, container_id);
+        rmdir(path);
+    } else {
+        snprintf(path, sizeof(path), "%s/%s_%s", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+        rmdir(path);
 
-    snprintf(path, sizeof(path), "%s/%s_%s", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
-    rmdir(path);
+        snprintf(path, sizeof(path), "%s/%s_%s", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
+        rmdir(path);
+    }
 
     return 0;
 }
@@ -240,20 +357,52 @@ int resource_manager_get_stats(resource_manager_t *rm,
     char buffer[BUF_SIZE];
 
     if (cpu_usage) {
-        snprintf(path, sizeof(path), "%s/%s_%s/cpuacct.usage", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-        if (read_file(path, buffer, sizeof(buffer)) == 0) {
-            *cpu_usage = strtoul(buffer, nullptr, 10);
+        if (rm->version == CGROUP_V2) {
+            // cgroup2: read from cpu.stat (format: usage_usec <value>)
+            snprintf(path, sizeof(path), "%s/%s_%s/cpu.stat", CGROUP_ROOT, rm->cgroup_path, container_id);
+            if (read_file(path, buffer, sizeof(buffer)) == 0) {
+                // Parse usage_usec from cpu.stat
+                char *usage_line = strstr(buffer, "usage_usec");
+                if (usage_line) {
+                    // Skip "usage_usec" and whitespace
+                    char *value_start = usage_line;
+                    while (*value_start && *value_start != ' ') value_start++;
+                    while (*value_start && *value_start == ' ') value_start++;
+                    *cpu_usage = strtoul(value_start, nullptr, 10) * 1000; // Convert microseconds to nanoseconds
+                } else {
+                    *cpu_usage = 0;
+                }
+            } else {
+                *cpu_usage = 0;
+            }
         } else {
-            *cpu_usage = 0;
+            // cgroup v1: read from cpuacct.usage
+            snprintf(path, sizeof(path), "%s/%s_%s/cpuacct.usage", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+            if (read_file(path, buffer, sizeof(buffer)) == 0) {
+                *cpu_usage = strtoul(buffer, nullptr, 10);
+            } else {
+                *cpu_usage = 0;
+            }
         }
     }
 
     if (memory_usage) {
-        snprintf(path, sizeof(path), "%s/%s_%s/memory.usage_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
-        if (read_file(path, buffer, sizeof(buffer)) == 0) {
-            *memory_usage = strtoul(buffer, nullptr, 10);
+        if (rm->version == CGROUP_V2) {
+            // cgroup2: read from memory.current
+            snprintf(path, sizeof(path), "%s/%s_%s/memory.current", CGROUP_ROOT, rm->cgroup_path, container_id);
+            if (read_file(path, buffer, sizeof(buffer)) == 0) {
+                *memory_usage = strtoul(buffer, nullptr, 10);
+            } else {
+                *memory_usage = 0;
+            }
         } else {
-            *memory_usage = 0;
+            // cgroup v1: read from memory.usage_in_bytes
+            snprintf(path, sizeof(path), "%s/%s_%s/memory.usage_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
+            if (read_file(path, buffer, sizeof(buffer)) == 0) {
+                *memory_usage = strtoul(buffer, nullptr, 10);
+            } else {
+                *memory_usage = 0;
+            }
         }
     }
 
