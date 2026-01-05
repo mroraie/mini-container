@@ -9,17 +9,14 @@ typedef enum {
     NS_PID = CLONE_NEWPID,       // Process ID isolation
     NS_MNT = CLONE_NEWNS,        // Mount namespace isolation
     NS_UTS = CLONE_NEWUTS,       // Hostname isolation
-    NS_NET = CLONE_NEWNET,       // Network isolation (optional)
     NS_USER = CLONE_NEWUSER      // User namespace isolation (optional)
 } namespace_type_t;
 
 #define CONTAINER_NAMESPACES (NS_PID | NS_MNT | NS_UTS)
-#define CONTAINER_NAMESPACES_FULL (NS_PID | NS_MNT | NS_UTS | NS_NET | NS_USER)
 
 typedef struct {
     int flags;              // Combined namespace flags
     char *hostname;         // Container hostname (for UTS namespace)
-    int use_network_ns;     // Whether to use network namespace
     int use_user_ns;        // Whether to use user namespace
 } namespace_config_t;
 

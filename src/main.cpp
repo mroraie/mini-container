@@ -36,7 +36,6 @@ static void print_usage(const char *program_name)
     printf("  -c, --cpu <shares>         CPU shares (default: 1024)\n");
     printf("  -r, --root <path>          Container root filesystem path\n");
     printf("  -n, --hostname <name>      Container hostname\n");
-    printf("  --network                  Enable network namespace isolation\n");
     printf("  --user                     Enable user namespace isolation\n");
     printf("\nExamples:\n");
     printf("  %s run /bin/sh\n", program_name);
@@ -54,7 +53,6 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config)
         {"cpu", required_argument, 0, 'c'},
         {"root", required_argument, 0, 'r'},
         {"hostname", required_argument, 0, 'n'},
-        {"network", no_argument, 0, 'N'},
         {"user", no_argument, 0, 'U'},
         {0, 0, 0, 0}};
 
@@ -66,7 +64,7 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config)
     resource_limits_init(&config->res_limits);
     fs_config_init(&config->fs_config);
 
-    while ((c = getopt_long(argc, argv, "hm:c:r:n:NU", long_options, &option_index)) != -1)
+    while ((c = getopt_long(argc, argv, "hm:c:r:n:U", long_options, &option_index)) != -1)
     {
         switch (c)
         {
@@ -88,10 +86,6 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config)
 
         case 'n':
             config->ns_config.hostname = strdup(optarg);
-            break;
-
-        case 'N':
-            config->ns_config.use_network_ns = 1;
             break;
 
         case 'U':

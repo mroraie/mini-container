@@ -11,7 +11,6 @@
 #include <dirent.h>
 #include <libgen.h>
 #include <memory>
-#include <sys/syscall.h>
 #include "../include/filesystem_manager.hpp"
 
 static const char *essential_dirs[] = {
@@ -167,34 +166,6 @@ int fs_setup_chroot(const char *root_path) {
     return 0;
 }
 
-int fs_setup_pivot_root(const char *new_root, const char *put_old) {
-    if (!new_root || !put_old) {
-        fprintf(stderr, "Error: new_root and put_old cannot be NULL\n");
-        return -1;
-    }
-
-    if (syscall(SYS_pivot_root, new_root, put_old) == -1) {
-        perror("pivot_root failed");
-        return -1;
-    }
-
-    if (chdir("/") == -1) {
-        perror("chdir after pivot_root failed");
-        return -1;
-    }
-
-    if (umount2(put_old, MNT_DETACH) == -1) {
-        perror("umount2 old root failed");
-        return -1;
-    }
-
-    if (rmdir(put_old) == -1) {
-        perror("rmdir old root failed");
-        return -1;
-    }
-
-    return 0;
-}
 
 int fs_mount_container_filesystems(const char *root_path) {
     if (!root_path) {

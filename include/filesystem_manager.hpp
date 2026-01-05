@@ -2,8 +2,7 @@
 #define FILESYSTEM_MANAGER_HPP
 
 typedef enum {
-    FS_CHROOT,      // Use chroot() for simple isolation
-    FS_PIVOT_ROOT   // Use pivot_root() for advanced isolation
+    FS_CHROOT       // Use chroot() for filesystem isolation
 } fs_isolation_method_t;
 
 typedef struct {
@@ -21,8 +20,6 @@ void fs_config_init(fs_config_t *config);
 int fs_create_minimal_root(const char *root_path);
 
 int fs_setup_chroot(const char *root_path);
-
-int fs_setup_pivot_root(const char *new_root, const char *put_old);
 
 int fs_mount_container_filesystems(const char *root_path);
 

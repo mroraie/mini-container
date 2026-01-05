@@ -25,7 +25,6 @@ void namespace_config_init(namespace_config_t *config) {
 
     config->flags = CONTAINER_NAMESPACES;  // PID, Mount, UTS by default
     config->hostname = nullptr;
-    config->use_network_ns = 0;  // Network namespace disabled by default
     config->use_user_ns = 0;     // User namespace disabled by default
 }
 
@@ -127,9 +126,6 @@ pid_t namespace_create_container(const namespace_config_t *config,
     };
 
     int flags = config->flags;
-    if (config->use_network_ns) {
-        flags |= NS_NET;
-    }
     if (config->use_user_ns) {
         flags |= NS_USER;
     }
@@ -148,7 +144,6 @@ int namespace_join(pid_t target_pid, int ns_type) {
              ns_type == CLONE_NEWPID ? "pid" :
              ns_type == CLONE_NEWNS ? "mnt" :
              ns_type == CLONE_NEWUTS ? "uts" :
-             ns_type == CLONE_NEWNET ? "net" :
              ns_type == CLONE_NEWUSER ? "user" : "unknown");
 
     fd = open(ns_path, O_RDONLY);
