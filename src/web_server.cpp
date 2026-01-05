@@ -143,10 +143,10 @@ std::string WebServer::handleRequest(const std::string& request) {
                           "Connection: close\r\n\r\n" +
                           result;
             } else {
-                response = "HTTP/1.1 200 OK\r\n"
+                response = std::string("HTTP/1.1 200 OK\r\n"
                           "Content-Type: application/json\r\n"
                           "Access-Control-Allow-Origin: *\r\n"
-                          "Connection: close\r\n\r\n" +
+                          "Connection: close\r\n\r\n") +
                           "{\"success\":false,\"error\":\"Test callback not set\"}";
             }
         } else {
