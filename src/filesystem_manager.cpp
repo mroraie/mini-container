@@ -6,10 +6,12 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/mount.h>
+#include <sys/sysmacros.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <libgen.h>
 #include <memory>
+#include <sys/syscall.h>
 #include "../include/filesystem_manager.hpp"
 
 static const char *essential_dirs[] = {
@@ -45,6 +47,62 @@ static struct {
     {"/dev/console", S_IFCHR | 0600, makedev(5, 1)},
     {nullptr, 0, 0}
 };
+
+static int mkdir_p(const char *path) {
+    if (!path) return -1;
+
+    if (mkdir(path, 0755) == 0) {
+        return 0;
+    }
+
+    if (errno == ENOENT) {
+        std::unique_ptr<char[]> path_copy(new char[strlen(path) + 1]);
+        strcpy(path_copy.get(), path);
+
+        char *parent = dirname(path_copy.get());
+        if (mkdir_p(parent) != 0) {
+            return -1;
+        }
+
+        return mkdir(path, 0755);
+    }
+
+    if (errno == EEXIST) {
+        return 0;
+    }
+
+    return -1;
+}
+
+static int copy_file(const char *src, const char *dst) {
+    int src_fd = open(src, O_RDONLY);
+    if (src_fd == -1) {
+        return -1;
+    }
+
+    int dst_fd = open(dst, O_WRONLY | O_CREAT | O_TRUNC, 0755);
+    if (dst_fd == -1) {
+        close(src_fd);
+        return -1;
+    }
+
+    char buffer[8192];
+    ssize_t bytes_read, bytes_written;
+
+    while ((bytes_read = read(src_fd, buffer, sizeof(buffer))) > 0) {
+        bytes_written = write(dst_fd, buffer, bytes_read);
+        if (bytes_written != bytes_read) {
+            close(src_fd);
+            close(dst_fd);
+            return -1;
+        }
+    }
+
+    close(src_fd);
+    close(dst_fd);
+
+    return (bytes_read == -1) ? -1 : 0;
+}
 
 void fs_config_init(fs_config_t *config) {
     if (!config) return;
@@ -236,61 +294,5 @@ int fs_cleanup_container_root(const char *root_path) {
     }
 
     return 0;
-}
-
-static int mkdir_p(const char *path) {
-    if (!path) return -1;
-
-    if (mkdir(path, 0755) == 0) {
-        return 0;
-    }
-
-    if (errno == ENOENT) {
-        std::unique_ptr<char[]> path_copy(new char[strlen(path) + 1]);
-        strcpy(path_copy.get(), path);
-
-        char *parent = dirname(path_copy.get());
-        if (mkdir_p(parent) != 0) {
-            return -1;
-        }
-
-        return mkdir(path, 0755);
-    }
-
-    if (errno == EEXIST) {
-        return 0;
-    }
-
-    return -1;
-}
-
-static int copy_file(const char *src, const char *dst) {
-    int src_fd = open(src, O_RDONLY);
-    if (src_fd == -1) {
-        return -1;
-    }
-
-    int dst_fd = open(dst, O_WRONLY | O_CREAT | O_TRUNC, 0755);
-    if (dst_fd == -1) {
-        close(src_fd);
-        return -1;
-    }
-
-    char buffer[8192];
-    ssize_t bytes_read, bytes_written;
-
-    while ((bytes_read = read(src_fd, buffer, sizeof(buffer))) > 0) {
-        bytes_written = write(dst_fd, buffer, bytes_read);
-        if (bytes_written != bytes_read) {
-            close(src_fd);
-            close(dst_fd);
-            return -1;
-        }
-    }
-
-    close(src_fd);
-    close(dst_fd);
-
-    return (bytes_read == -1) ? -1 : 0;
 }
 
