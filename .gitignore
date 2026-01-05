@@ -36,3 +36,6 @@ Thumbs.db
 # Container runtime files
 /tmp/container_*
 /tmp/mini_container*
+
+# Development files
+docs1/
