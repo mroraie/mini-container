@@ -170,22 +170,6 @@ docker-compose down
 ./mini-container destroy container_id
 ```
 
-### استفاده پیشرفته
-
-```bash
-# نام میزبان سفارشی
-./mini-container run --hostname "my-container" /bin/hostname
-
-# فایل‌سیستم ریشه سفارشی
-./mini-container run --root /path/to/rootfs /bin/sh
-
-# فعال‌سازی ایزولاسیون شبکه
-./mini-container run --network /bin/sh
-
-# فعال‌سازی فضای نام کاربر
-./mini-container run --user /bin/sh
-```
-
 ## مفاهیم سیستم‌عامل نشان داده شده
 
 ### ۱. فضای نام لینوکس
