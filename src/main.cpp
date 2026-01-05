@@ -1,5 +1,5 @@
-#include <sys/wait.h> // for waitpid
-#include <ctime>      // for localtime, strftime, ctime
+#include <sys/wait.h>
+#include <ctime>
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>

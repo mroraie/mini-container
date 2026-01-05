@@ -4,30 +4,30 @@
 #include <sys/types.h>
 
 typedef enum {
-    RESOURCE_CPU,       // CPU usage limits
-    RESOURCE_MEMORY     // Memory usage limits
+    RESOURCE_CPU,
+    RESOURCE_MEMORY
 } resource_type_t;
 
 typedef struct {
-    int shares;          // CPU shares (relative weight)
-    int quota_us;        // CPU quota in microseconds (-1 for unlimited)
-    int period_us;       // CPU period in microseconds
+    int shares;
+    int quota_us;
+    int period_us;
 } cpu_limits_t;
 
 typedef struct {
-    unsigned long limit_bytes;    // Memory limit in bytes
-    unsigned long swap_limit_bytes; // Swap limit in bytes
+    unsigned long limit_bytes;
+    unsigned long swap_limit_bytes;
 } memory_limits_t;
 
 typedef struct {
     cpu_limits_t cpu;
     memory_limits_t memory;
-    int enabled;        // Whether resource limits are enabled
+    int enabled;
 } resource_limits_t;
 
 typedef struct resource_manager {
-    char *cgroup_path;      // Base path for container cgroups
-    int initialized;        // Whether cgroups are initialized
+    char *cgroup_path;
+    int initialized;
 } resource_manager_t;
 
 #ifdef __cplusplus
@@ -64,5 +64,5 @@ void resource_manager_cleanup(resource_manager_t *rm);
 }
 #endif
 
-#endif /* RESOURCE_MANAGER_HPP */
+#endif
 

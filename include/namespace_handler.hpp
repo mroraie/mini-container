@@ -6,16 +6,16 @@
 #include <sys/types.h>
 
 typedef enum {
-    NS_PID = CLONE_NEWPID,       // Process ID isolation
-    NS_MNT = CLONE_NEWNS,        // Mount namespace isolation
-    NS_UTS = CLONE_NEWUTS        // Hostname isolation
+    NS_PID = CLONE_NEWPID,
+    NS_MNT = CLONE_NEWNS,
+    NS_UTS = CLONE_NEWUTS
 } namespace_type_t;
 
 #define CONTAINER_NAMESPACES (NS_PID | NS_MNT | NS_UTS)
 
 typedef struct {
-    int flags;              // Combined namespace flags
-    char *hostname;         // Container hostname (for UTS namespace)
+    int flags;
+    char *hostname;
 } namespace_config_t;
 
 #ifdef __cplusplus
@@ -40,5 +40,5 @@ int namespace_join(pid_t target_pid, int ns_type);
 }
 #endif
 
-#endif /* NAMESPACE_HANDLER_HPP */
+#endif
 

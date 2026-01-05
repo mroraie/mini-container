@@ -23,7 +23,7 @@ typedef struct {
 void namespace_config_init(namespace_config_t *config) {
     if (!config) return;
 
-    config->flags = CONTAINER_NAMESPACES;  // PID, Mount, UTS by default
+    config->flags = CONTAINER_NAMESPACES;
     config->hostname = nullptr;
 }
 

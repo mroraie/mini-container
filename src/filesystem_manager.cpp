@@ -107,8 +107,8 @@ void fs_config_init(fs_config_t *config) {
     if (!config) return;
 
     config->root_path = nullptr;
-    config->method = FS_CHROOT;  // Use chroot by default
-    config->create_minimal_fs = 0;  // Don't create minimal FS by default
+    config->method = FS_CHROOT;
+    config->create_minimal_fs = 0;
 }
 
 int fs_create_minimal_root(const char *root_path) {
@@ -225,7 +225,6 @@ int fs_populate_container_root(const char *root_path, const char *host_root) {
 
         if (copy_file(src_path, dst_path) != 0) {
             fprintf(stderr, "Warning: failed to copy %s\n", essential_files[i]);
-            // Continue with other files
         }
     }
 
@@ -251,7 +250,7 @@ int fs_cleanup_container_root(const char *root_path) {
     for (int i = 0; mounts_to_unmount[i] != nullptr; i++) {
         snprintf(mount_path, sizeof(mount_path), "%s%s", root_path, mounts_to_unmount[i]);
         if (umount2(mount_path, MNT_DETACH) == -1) {
-            if (errno != EINVAL) {  // Ignore if not mounted
+            if (errno != EINVAL) {
                 perror("umount2 failed");
             }
         }

@@ -17,7 +17,6 @@
 
 #define BUF_SIZE 256
 
-// Helper functions
 static int write_file(const char *path, const char *value) {
     int fd = open(path, O_WRONLY);
     if (fd == -1) {
@@ -219,10 +218,10 @@ int resource_manager_destroy_cgroup(resource_manager_t *rm,
     char path[BUF_SIZE];
 
     snprintf(path, sizeof(path), "%s/%s_%s", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-    rmdir(path);  // Ignore errors - directory might not be empty yet
+    rmdir(path);
 
     snprintf(path, sizeof(path), "%s/%s_%s", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
-    rmdir(path);  // Ignore errors
+    rmdir(path);
 
     return 0;
 }
@@ -262,14 +261,14 @@ int resource_manager_get_stats(resource_manager_t *rm,
 void resource_limits_init(resource_limits_t *limits) {
     if (!limits) return;
 
-    limits->cpu.shares = 1024;        // Default CPU shares
-    limits->cpu.quota_us = -1;        // No CPU quota by default
-    limits->cpu.period_us = 100000;   // Default period
+    limits->cpu.shares = 1024;
+    limits->cpu.quota_us = -1;
+    limits->cpu.period_us = 100000;
 
-    limits->memory.limit_bytes = 128 * 1024 * 1024;  // 128MB default
-    limits->memory.swap_limit_bytes = 0;             // No swap limit
+    limits->memory.limit_bytes = 128 * 1024 * 1024;
+    limits->memory.swap_limit_bytes = 0;
 
-    limits->enabled = 1;  // Enable resource limits by default
+    limits->enabled = 1;
 }
 
 void resource_manager_cleanup(resource_manager_t *rm) {

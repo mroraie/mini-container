@@ -8,7 +8,6 @@
 #include <ctime>
 
 #ifdef _WIN32
-// Windows demo mode - no actual container functionality
 #define DEMO_MODE
 #else
 #include "../include/container_manager.hpp"
@@ -36,7 +35,7 @@ struct ContainerDisplay {
 class TerminalUI {
 private:
 #ifdef _WIN32
-    void* cm; // Dummy for Windows demo
+    void* cm;
 #else
     container_manager_t cm;
 #endif
@@ -345,13 +344,10 @@ public:
                     destroyContainerDemo();
                     break;
                 case 5:
-                    // Show container info - for now just refresh display
                     break;
                 case 6:
-                    // List containers - already shown
                     break;
                 case 7:
-                    // Execute command - would need more implementation
                     std::cout << "This feature is not yet implemented!\n";
                     std::cin.ignore();
                     std::cin.get();

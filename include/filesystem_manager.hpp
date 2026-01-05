@@ -2,13 +2,13 @@
 #define FILESYSTEM_MANAGER_HPP
 
 typedef enum {
-    FS_CHROOT       // Use chroot() for filesystem isolation
+    FS_CHROOT
 } fs_isolation_method_t;
 
 typedef struct {
-    char *root_path;            // Path to container root filesystem
-    fs_isolation_method_t method; // Isolation method to use
-    int create_minimal_fs;      // Whether to create minimal filesystem
+    char *root_path;
+    fs_isolation_method_t method;
+    int create_minimal_fs;
 } fs_config_t;
 
 #ifdef __cplusplus
@@ -31,5 +31,5 @@ int fs_cleanup_container_root(const char *root_path);
 }
 #endif
 
-#endif /* FILESYSTEM_MANAGER_HPP */
+#endif
 

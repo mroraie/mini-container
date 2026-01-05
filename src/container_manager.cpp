@@ -50,7 +50,6 @@ static void remove_container(container_manager_t *cm, const char *container_id) 
         if (strcmp(cm->containers[i]->id, container_id) == 0) {
             free(cm->containers[i]->id);
             free(cm->containers[i]);
-            // Shift remaining containers
             for (int j = i; j < cm->container_count - 1; j++) {
                 cm->containers[j] = cm->containers[j + 1];
             }
@@ -312,7 +311,6 @@ int container_manager_run(container_manager_t *cm, container_config_t *config) {
         }
     }
 
-    // Create container
     if (container_manager_create(cm, config) != 0) {
         return -1;
     }
