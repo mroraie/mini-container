@@ -9,7 +9,9 @@
 #include <cstring>
 #include <unistd.h>
 #include <getopt.h>
+#include <csignal>
 #include "../include/container_manager.hpp"
+#include "web_server.hpp"
 
 using namespace std;
 
