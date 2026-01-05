@@ -6,13 +6,8 @@ LDFLAGS =
 SRCS = src/main.cpp src/container_manager.cpp src/namespace_handler.cpp src/resource_manager.cpp src/filesystem_manager.cpp
 OBJS = $(SRCS:.cpp=.o)
 
-# UI Source files
-UI_SRCS = src/terminal_ui.cpp src/container_manager.cpp src/namespace_handler.cpp src/resource_manager.cpp src/filesystem_manager.cpp
-UI_OBJS = $(UI_SRCS:.cpp=.o)
-
-# Target executables
+# Target executable
 TARGET = mini-container
-UI_TARGET = mini-container-ui
 
 # Default target
 all: $(TARGET)
@@ -21,24 +16,13 @@ all: $(TARGET)
 $(TARGET): $(OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $^
 
-# Build UI application
-ui: $(UI_TARGET)
-
-ifdef _WIN32
-$(UI_TARGET): src/terminal_ui.o
-	$(CXX) $(LDFLAGS) -o $@ $<
-else
-$(UI_TARGET): $(UI_OBJS)
-	$(CXX) $(LDFLAGS) -o $@ $^
-endif
-
 # Compile source files
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Clean build artifacts
 clean:
-	rm -f $(OBJS) $(UI_OBJS) $(TARGET) $(UI_TARGET)
+	rm -f $(OBJS) $(TARGET)
 
 # Install (copy to /usr/local/bin)
 install: $(TARGET)

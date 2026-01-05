@@ -1,6 +1,5 @@
 # Compiled executables
 mini-container
-mini-container-ui
 *.exe
 
 # Object files
