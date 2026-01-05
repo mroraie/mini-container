@@ -17,6 +17,98 @@
 
 #define BUF_SIZE 256
 
+// Helper functions
+static int write_file(const char *path, const char *value) {
+    int fd = open(path, O_WRONLY);
+    if (fd == -1) {
+        perror("open cgroup file failed");
+        return -1;
+    }
+
+    ssize_t written = write(fd, value, strlen(value));
+    if (written == -1) {
+        perror("write to cgroup file failed");
+        close(fd);
+        return -1;
+    }
+
+    close(fd);
+    return 0;
+}
+
+static int read_file(const char *path, char *buffer, size_t size) {
+    int fd = open(path, O_RDONLY);
+    if (fd == -1) {
+        perror("open cgroup file failed");
+        return -1;
+    }
+
+    ssize_t read_bytes = read(fd, buffer, size - 1);
+    if (read_bytes == -1) {
+        perror("read from cgroup file failed");
+        close(fd);
+        return -1;
+    }
+
+    buffer[read_bytes] = '\0';
+    close(fd);
+    return 0;
+}
+
+static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
+                         const cpu_limits_t *limits) {
+    char path[BUF_SIZE];
+    char value[32];
+
+    if (limits->shares > 0) {
+        snprintf(path, sizeof(path), "%s/%s_%s/cpu.shares", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+        snprintf(value, sizeof(value), "%d", limits->shares);
+        if (write_file(path, value) != 0) {
+            return -1;
+        }
+    }
+
+    if (limits->quota_us > 0) {
+        snprintf(path, sizeof(path), "%s/%s_%s/cpu.cfs_quota_us", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+        snprintf(value, sizeof(value), "%d", limits->quota_us);
+        if (write_file(path, value) != 0) {
+            return -1;
+        }
+
+        snprintf(path, sizeof(path), "%s/%s_%s/cpu.cfs_period_us", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+        snprintf(value, sizeof(value), "%d", limits->period_us > 0 ? limits->period_us : 100000);
+        if (write_file(path, value) != 0) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+static int set_memory_limits(resource_manager_t *rm, const char *container_id,
+                           const memory_limits_t *limits) {
+    char path[BUF_SIZE];
+    char value[32];
+
+    if (limits->limit_bytes > 0) {
+        snprintf(path, sizeof(path), "%s/%s_%s/memory.limit_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
+        snprintf(value, sizeof(value), "%lu", limits->limit_bytes);
+        if (write_file(path, value) != 0) {
+            return -1;
+        }
+    }
+
+    if (limits->swap_limit_bytes > 0) {
+        snprintf(path, sizeof(path), "%s/%s_%s/memory.memsw.limit_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
+        snprintf(value, sizeof(value), "%lu", limits->swap_limit_bytes);
+        if (write_file(path, value) != 0) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 int resource_manager_init(resource_manager_t *rm, const char *base_path) {
     if (!rm) {
         fprintf(stderr, "Error: resource manager is NULL\n");
@@ -164,97 +256,6 @@ int resource_manager_get_stats(resource_manager_t *rm,
         }
     }
 
-    return 0;
-}
-
-static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
-                         const cpu_limits_t *limits) {
-    char path[BUF_SIZE];
-    char value[32];
-
-    if (limits->shares > 0) {
-        snprintf(path, sizeof(path), "%s/%s_%s/cpu.shares", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-        snprintf(value, sizeof(value), "%d", limits->shares);
-        if (write_file(path, value) != 0) {
-            return -1;
-        }
-    }
-
-    if (limits->quota_us > 0) {
-        snprintf(path, sizeof(path), "%s/%s_%s/cpu.cfs_quota_us", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-        snprintf(value, sizeof(value), "%d", limits->quota_us);
-        if (write_file(path, value) != 0) {
-            return -1;
-        }
-
-        snprintf(path, sizeof(path), "%s/%s_%s/cpu.cfs_period_us", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-        snprintf(value, sizeof(value), "%d", limits->period_us > 0 ? limits->period_us : 100000);
-        if (write_file(path, value) != 0) {
-            return -1;
-        }
-    }
-
-    return 0;
-}
-
-static int set_memory_limits(resource_manager_t *rm, const char *container_id,
-                           const memory_limits_t *limits) {
-    char path[BUF_SIZE];
-    char value[32];
-
-    if (limits->limit_bytes > 0) {
-        snprintf(path, sizeof(path), "%s/%s_%s/memory.limit_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
-        snprintf(value, sizeof(value), "%lu", limits->limit_bytes);
-        if (write_file(path, value) != 0) {
-            return -1;
-        }
-    }
-
-    if (limits->swap_limit_bytes > 0) {
-        snprintf(path, sizeof(path), "%s/%s_%s/memory.memsw.limit_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
-        snprintf(value, sizeof(value), "%lu", limits->swap_limit_bytes);
-        if (write_file(path, value) != 0) {
-            return -1;
-        }
-    }
-
-    return 0;
-}
-
-static int write_file(const char *path, const char *value) {
-    int fd = open(path, O_WRONLY);
-    if (fd == -1) {
-        perror("open cgroup file failed");
-        return -1;
-    }
-
-    ssize_t written = write(fd, value, strlen(value));
-    if (written == -1) {
-        perror("write to cgroup file failed");
-        close(fd);
-        return -1;
-    }
-
-    close(fd);
-    return 0;
-}
-
-static int read_file(const char *path, char *buffer, size_t size) {
-    int fd = open(path, O_RDONLY);
-    if (fd == -1) {
-        perror("open cgroup file failed");
-        return -1;
-    }
-
-    ssize_t read_bytes = read(fd, buffer, size - 1);
-    if (read_bytes == -1) {
-        perror("read from cgroup file failed");
-        close(fd);
-        return -1;
-    }
-
-    buffer[read_bytes] = '\0';
-    close(fd);
     return 0;
 }
 
