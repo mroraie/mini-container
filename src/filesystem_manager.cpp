@@ -13,6 +13,8 @@
 #include <memory>
 #include "../include/filesystem_manager.hpp"
 
+using namespace std;
+
 static const char *essential_dirs[] = {
     "/bin",
     "/sbin",

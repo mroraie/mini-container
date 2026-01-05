@@ -9,6 +9,8 @@
 #include <csignal>
 #include "../include/container_manager.hpp"
 
+using namespace std;
+
 #define MAX_CONTAINER_ID 64
 
 #define DEFAULT_MAX_CONTAINERS 10

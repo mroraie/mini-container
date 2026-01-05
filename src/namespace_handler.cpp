@@ -12,6 +12,8 @@
 #include <memory>
 #include "../include/namespace_handler.hpp"
 
+using namespace std;
+
 #define CHILD_STACK_SIZE (8 * 1024 * 1024)
 
 typedef struct {

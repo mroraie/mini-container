@@ -10,6 +10,8 @@
 #include <memory>
 #include "../include/resource_manager.hpp"
 
+using namespace std;
+
 #define CGROUP_ROOT "/sys/fs/cgroup"
 
 #define CPU_CGROUP_PATH CGROUP_ROOT "/cpu"

@@ -11,6 +11,8 @@
 #include <getopt.h>
 #include "../include/container_manager.hpp"
 
+using namespace std;
+
 static container_manager_t cm;
 
 static const char *state_names[] = {

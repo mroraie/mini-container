@@ -13,6 +13,8 @@
 #include "../include/container_manager.hpp"
 #endif
 
+using namespace std;
+
 #ifdef _WIN32
 enum container_state_t {
     CONTAINER_CREATED,
