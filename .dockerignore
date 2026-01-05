@@ -1,36 +1,57 @@
 # Git files
 .git
 .gitignore
+.github/
 
 # Build artifacts
 *.o
 mini-container
 mini-container-ui
 *.exe
+*.dll
+*.so
+*.dylib
 
 # IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Documentation (keep in container for reference)
 # docs/
 
 # Temporary files
-*~
 *.tmp
 *.bak
 *.log
+.cache/
+*.cache
 
 # Node modules (if any)
 node_modules/
 
+# Python files (if any)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
 # Docker files (don't copy into themselves)
-Dockerfile
-docker-compose.yml
+Dockerfile*
+docker-compose*.yml
 .dockerignore
+
+# Deployment scripts
+deploy.sh
+deploy-dev.sh
+
+# Test files
+tests/*.log
+tests/temp/

@@ -21,7 +21,7 @@ WORKDIR /app
 COPY . .
 
 # Build the application
-RUN make clean && make
+RUN make clean && make all ui
 
 # Create necessary directories
 RUN mkdir -p /tmp/containers
@@ -32,5 +32,5 @@ RUN chmod +x mini-container mini-container-ui demo_ui.sh
 # Expose any necessary ports (none needed for this container system)
 # EXPOSE
 
-# Set the default command
-CMD ["./demo_ui.sh"]
+# Set the default command to run the UI application
+CMD ["./mini-container-ui"]

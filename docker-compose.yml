@@ -21,7 +21,7 @@ services:
       - seccomp:unconfined
     tmpfs:
       - /tmp:exec,size=100m
-    command: ["bash"]
+    command: ["./mini-container-ui"]
     networks:
       - container-net
 
