@@ -14,6 +14,7 @@ static WebServer* web_server = nullptr;
 static bool running = true;
 
 void signal_handler(int signum) {
+    (void)signum;  // Suppress unused parameter warning
     cout << "\nShutting down web server..." << endl;
     running = false;
 

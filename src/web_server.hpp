@@ -6,6 +6,8 @@
 #include <atomic>
 #include <functional>
 #include <unordered_map>
+#include <vector>
+#include <mutex>
 #include "container_manager.hpp"
 
 class WebServer {

@@ -6,7 +6,6 @@
 #include <sstream>
 #include <iostream>
 #include <algorithm>
-#include <regex>
 
 WebServer::WebServer(container_manager_t* cm, int port)
     : cm_(cm), port_(port), running_(false), server_socket_(-1) {
