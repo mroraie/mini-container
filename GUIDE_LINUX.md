@@ -49,12 +49,19 @@ ls /proc/self/ns/
 ```bash
 # بررسی mount شدن cgroups
 mount | grep cgroup
-# باید چیزی شبیه به این ببینید:
-# cgroup on /sys/fs/cgroup type cgroup2 (rw,nosuid,nodev,noexec,relatime)
+# برای cgroup v2 باید چیزی شبیه به این ببینید:
+# cgroup2 on /sys/fs/cgroup type cgroup2 (rw,nosuid,nodev,noexec,relatime)
+# برای cgroup v1 باید چیزی شبیه به این ببینید:
+# cgroup on /sys/fs/cgroup/cpu type cgroup (rw,nosuid,nodev,noexec,relatime,cpu)
+# cgroup on /sys/fs/cgroup/memory type cgroup (rw,nosuid,nodev,noexec,relatime,memory)
 
-# اگر mount نشده، mount کنید:
-sudo mkdir -p /sys/fs/cgroup
-sudo mount -t cgroup2 none /sys/fs/cgroup
+# بررسی نسخه cgroup
+ls /sys/fs/cgroup/cgroup.controllers
+# اگر این فایل وجود داشت، سیستم از cgroup v2 استفاده می‌کند
+# اگر وجود نداشت، سیستم از cgroup v1 استفاده می‌کند
+
+# نکته: Mini Container UI به صورت خودکار نسخه cgroup را تشخیص می‌دهد
+# نیازی به mount دستی نیست مگر اینکه سیستم شما cgroups را mount نکرده باشد
 ```
 
 ## نصب و ساخت
@@ -274,6 +281,38 @@ curl http://localhost:8080
 # بررسی فایروال
 sudo iptables -L -n | grep 8080
 ```
+
+### مشکل: خطای "CPU cgroup subsystem not available" یا "memory cgroup subsystem not available"
+
+این خطا معمولاً زمانی رخ می‌دهد که سیستم از cgroup v2 استفاده می‌کند:
+
+```bash
+# بررسی نسخه cgroup
+ls /sys/fs/cgroup/cgroup.controllers
+# اگر این فایل وجود داشت، سیستم از cgroup v2 استفاده می‌کند
+
+# بررسی mount شدن cgroup
+mount | grep cgroup
+
+# برای cgroup v2 باید چیزی شبیه به این ببینید:
+# cgroup2 on /sys/fs/cgroup type cgroup2 (rw,nosuid,nodev,noexec,relatime)
+
+# اگر cgroup mount نشده است:
+sudo mkdir -p /sys/fs/cgroup
+sudo mount -t cgroup2 none /sys/fs/cgroup
+
+# بررسی کنترلرهای فعال
+cat /sys/fs/cgroup/cgroup.controllers
+# باید cpu و memory را ببینید
+
+# نکته: نسخه جدید Mini Container UI به صورت خودکار cgroup v2 را تشخیص می‌دهد
+# مطمئن شوید که از آخرین نسخه استفاده می‌کنید:
+git pull origin master
+make clean
+make ui
+```
+
+برای اطلاعات بیشتر به [CGROUP_V2_SUPPORT.md](CGROUP_V2_SUPPORT.md) مراجعه کنید.
 
 ## استفاده با systemd (اجرای خودکار)
 
