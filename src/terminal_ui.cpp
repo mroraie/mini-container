@@ -157,10 +157,10 @@ private:
 #endif
             ContainerDisplay display = {container_id, CONTAINER_CREATED, 0, time(nullptr), 0, 0, 0};
             containers.push_back(display);
-            std::cout << "✅ Container " << container_id << " created successfully!\n";
+            std::cout << "Container " << container_id << " created successfully!\n";
 #ifndef _WIN32
         } else {
-            std::cout << "❌ Error creating container!\n";
+            std::cout << "Error creating container!\n";
         }
 #endif
 
@@ -171,7 +171,7 @@ private:
 
     void startContainerDemo() {
         if (containers.empty()) {
-            std::cout << "❌ No containers exist!\n";
+            std::cout << "Error: No containers exist!\n";
             std::cin.ignore();
             std::cin.get();
             return;
@@ -182,7 +182,7 @@ private:
         std::cin >> index;
 
         if (index < 1 || index > (int)containers.size()) {
-            std::cout << "❌ Invalid number!\n";
+            std::cout << "Error: Invalid number!\n";
             std::cin.ignore();
             std::cin.get();
             return;
@@ -215,10 +215,10 @@ private:
             containers[index-1].state = CONTAINER_RUNNING;
             containers[index-1].started_at = time(nullptr);
             containers[index-1].pid = rand() % 10000 + 1000;
-            std::cout << "✅ Container " << container_id << " started successfully!\n";
+            std::cout << "Success: Container " << container_id << " started successfully!\n";
 #ifndef _WIN32
         } else {
-            std::cout << "❌ Error starting container!\n";
+            std::cout << "Error: Error starting container!\n";
         }
 #endif
 
@@ -228,7 +228,7 @@ private:
 
     void stopContainerDemo() {
         if (containers.empty()) {
-            std::cout << "❌ No containers exist!\n";
+            std::cout << "Error: No containers exist!\n";
             std::cin.ignore();
             std::cin.get();
             return;
@@ -239,7 +239,7 @@ private:
         std::cin >> index;
 
         if (index < 1 || index > (int)containers.size()) {
-            std::cout << "❌ Invalid number!\n";
+            std::cout << "Error: Invalid number!\n";
             std::cin.ignore();
             std::cin.get();
             return;
@@ -250,10 +250,10 @@ private:
         if (container_manager_stop(&cm, container_id.c_str()) == 0) {
 #endif
             containers[index-1].state = CONTAINER_STOPPED;
-            std::cout << "✅ Container " << container_id << " stopped successfully!\n";
+            std::cout << "Success: Container " << container_id << " stopped successfully!\n";
 #ifndef _WIN32
         } else {
-            std::cout << "❌ Error stopping container!\n";
+            std::cout << "Error: Error stopping container!\n";
         }
 #endif
 
@@ -263,7 +263,7 @@ private:
 
     void destroyContainerDemo() {
         if (containers.empty()) {
-            std::cout << "❌ No containers exist!\n";
+            std::cout << "Error: No containers exist!\n";
             std::cin.ignore();
             std::cin.get();
             return;
@@ -274,7 +274,7 @@ private:
         std::cin >> index;
 
         if (index < 1 || index > (int)containers.size()) {
-            std::cout << "❌ Invalid number!\n";
+            std::cout << "Error: Invalid number!\n";
             std::cin.ignore();
             std::cin.get();
             return;
@@ -285,10 +285,10 @@ private:
         if (container_manager_destroy(&cm, container_id.c_str()) == 0) {
 #endif
             containers[index-1].state = CONTAINER_DESTROYED;
-            std::cout << "✅ Container " << container_id << " destroyed successfully!\n";
+            std::cout << "Success: Container " << container_id << " destroyed successfully!\n";
 #ifndef _WIN32
         } else {
-            std::cout << "❌ Error destroying container!\n";
+            std::cout << "Error: Error destroying container!\n";
         }
 #endif
 
@@ -374,6 +374,6 @@ int main() {
     TerminalUI ui;
     ui.run();
 
-    std::cout << "\nGoodbye! 👋\n";
+    std::cout << "\nGoodbye!\n";
     return 0;
 }
