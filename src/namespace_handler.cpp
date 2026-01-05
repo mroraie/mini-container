@@ -25,7 +25,6 @@ void namespace_config_init(namespace_config_t *config) {
 
     config->flags = CONTAINER_NAMESPACES;  // PID, Mount, UTS by default
     config->hostname = nullptr;
-    config->use_user_ns = 0;     // User namespace disabled by default
 }
 
 int namespace_set_hostname(const char *hostname) {
@@ -126,9 +125,6 @@ pid_t namespace_create_container(const namespace_config_t *config,
     };
 
     int flags = config->flags;
-    if (config->use_user_ns) {
-        flags |= NS_USER;
-    }
 
     pid_t pid = namespace_clone_process(flags, child_stack.get(), CHILD_STACK_SIZE,
                                       container_child, &args);
@@ -143,8 +139,7 @@ int namespace_join(pid_t target_pid, int ns_type) {
     snprintf(ns_path, sizeof(ns_path), "/proc/%d/ns/%s", target_pid,
              ns_type == CLONE_NEWPID ? "pid" :
              ns_type == CLONE_NEWNS ? "mnt" :
-             ns_type == CLONE_NEWUTS ? "uts" :
-             ns_type == CLONE_NEWUSER ? "user" : "unknown");
+             ns_type == CLONE_NEWUTS ? "uts" : "unknown");
 
     fd = open(ns_path, O_RDONLY);
     if (fd == -1) {
