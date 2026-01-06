@@ -44,13 +44,20 @@ echo "Test 1: Running CPU-intensive task and checking CPU usage"
 echo "----------------------------------------------------------"
 
 # Create a container with CPU-intensive task
-CONTAINER_ID=$($BINARY run \
-    --command "/bin/sh" \
-    --args "-c" "while true; do :; done" \
-    --memory 128 \
-    --cpu 1024 \
-    --hostname "cpu-test" \
-    --root-path "/tmp/cpu_test_root" 2>&1 | grep -o "container_[0-9_]*" | head -1)
+# Run in background with timeout to avoid blocking
+RUN_OUTPUT=$(timeout 2 $BINARY run \
+    -m 128 \
+    -c 1024 \
+    -n "cpu-test" \
+    -r "/tmp/cpu_test_root" \
+    /bin/sh -c "while true; do :; done" 2>&1 || true)
+CONTAINER_ID=$(echo "$RUN_OUTPUT" | grep -o "container_[0-9_]*" | head -1)
+
+# If not found in output, try to get from list
+if [ -z "$CONTAINER_ID" ]; then
+    sleep 1
+    CONTAINER_ID=$($BINARY list 2>/dev/null | grep -E "(RUNNING|CREATED)" | awk '{print $1}' | head -1)
+fi
 
 if [ -z "$CONTAINER_ID" ]; then
     echo "Error: Failed to create container"
