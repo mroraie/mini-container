@@ -36,6 +36,7 @@ static void print_usage(const char *program_name)
     printf("  -c, --cpu <shares>         CPU shares (default: 1024)\n");
     printf("  -r, --root <path>          Container root filesystem path\n");
     printf("  -n, --hostname <name>      Container hostname\n");
+    printf("  -d, --detach               Run container in background (don't wait)\n");
     printf("\nExamples:\n");
     printf("  %s run /bin/sh\n", program_name);
     printf("  %s run --memory 256 --cpu 512 /bin/echo \"Hello World\"\n", program_name);
@@ -44,7 +45,7 @@ static void print_usage(const char *program_name)
     printf("  %s exec container_123 /bin/ps\n", program_name);
 }
 
-static int parse_run_options(int argc, char *argv[], container_config_t *config)
+static int parse_run_options(int argc, char *argv[], container_config_t *config, int *detach)
 {
     static struct option long_options[] = {
         {"help", no_argument, 0, 'h'},
@@ -52,17 +53,19 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config)
         {"cpu", required_argument, 0, 'c'},
         {"root", required_argument, 0, 'r'},
         {"hostname", required_argument, 0, 'n'},
+        {"detach", no_argument, 0, 'd'},
         {0, 0, 0, 0}};
 
     int option_index = 0;
     int c;
 
     config->id = nullptr;
+    *detach = 0;
     namespace_config_init(&config->ns_config);
     resource_limits_init(&config->res_limits);
     fs_config_init(&config->fs_config);
 
-    while ((c = getopt_long(argc, argv, "hm:c:r:n:", long_options, &option_index)) != -1)
+    while ((c = getopt_long(argc, argv, "hm:c:r:n:d", long_options, &option_index)) != -1)
     {
         switch (c)
         {
@@ -84,6 +87,10 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config)
 
         case 'n':
             config->ns_config.hostname = strdup(optarg);
+            break;
+
+        case 'd':
+            *detach = 1;
             break;
 
         default:
@@ -114,8 +121,9 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config)
 static int handle_run(int argc, char *argv[])
 {
     container_config_t config;
+    int detach = 0;
 
-    if (parse_run_options(argc, argv, &config) != 0)
+    if (parse_run_options(argc, argv, &config, &detach) != 0)
     {
         return EXIT_FAILURE;
     }
@@ -133,11 +141,20 @@ static int handle_run(int argc, char *argv[])
     {
         printf("Container %s started with PID %d\n", info->id, info->pid);
 
-        if (info->pid > 0)
+        if (detach)
         {
-            int status;
-            waitpid(info->pid, &status, 0);
-            printf("Container %s exited with status %d\n", info->id, WEXITSTATUS(status));
+            // Don't wait, just return
+            printf("Container running in background. Use 'stop %s' to stop it.\n", info->id);
+        }
+        else
+        {
+            // Wait for container to finish
+            if (info->pid > 0)
+            {
+                int status;
+                waitpid(info->pid, &status, 0);
+                printf("Container %s exited with status %d\n", info->id, WEXITSTATUS(status));
+            }
         }
     }
 
