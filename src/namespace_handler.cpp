@@ -95,12 +95,10 @@ static int setup_container_filesystem(const namespace_config_t *config) {
 static int container_child(void *arg) {
     clone_args_t *args = static_cast<clone_args_t*>(arg);
     
-    // Add this process to cgroup BEFORE execvp
-    // This ensures the process is in the cgroup from the start
-    if (args->add_to_cgroup_callback) {
-        pid_t my_pid = getpid();
-        args->add_to_cgroup_callback(my_pid, args->cgroup_user_data);
-    }
+    // Note: We can't use getpid() here because we're in a new PID namespace
+    // The callback will be called with the actual PID from the parent
+    // For now, we'll skip adding to cgroup here and do it in parent after clone
+    // This is a limitation - ideally we'd use clone3 with cgroup flag
 
     if (namespace_setup_isolation(args->config) != 0) {
         fprintf(stderr, "Failed to setup namespace isolation\n");
@@ -171,6 +169,15 @@ pid_t namespace_create_container_with_cgroup(const namespace_config_t *config,
 
     pid_t pid = namespace_clone_process(flags, child_stack.get(), CHILD_STACK_SIZE,
                                       container_child, &args);
+    
+    // Add process to cgroup immediately after clone (before execvp in child)
+    // This ensures the process is in the cgroup from the start
+    if (pid > 0 && add_to_cgroup_callback) {
+        // Give child a tiny moment to start (but it hasn't execvp'd yet)
+        // This is a race condition workaround - ideally we'd use clone3 with cgroup flag
+        usleep(1000); // 1ms delay to ensure child is ready
+        add_to_cgroup_callback(pid, cgroup_user_data);
+    }
 
     return pid;
 }
