@@ -134,50 +134,6 @@ std::string WebServer::handleRequest(const std::string& request) {
                           "Connection: close\r\n\r\n" +
                           getContainerInfoJSON(id);
             }
-        } else if (path == "/api/test/comprehensive") {
-            if (test_callback_) {
-                std::string result = test_callback_();
-                response = "HTTP/1.1 200 OK\r\n"
-                          "Content-Type: application/json\r\n"
-                          "Access-Control-Allow-Origin: *\r\n"
-                          "Connection: close\r\n\r\n" +
-                          result;
-            } else {
-                response = std::string("HTTP/1.1 200 OK\r\n"
-                          "Content-Type: application/json\r\n"
-                          "Access-Control-Allow-Origin: *\r\n"
-                          "Connection: close\r\n\r\n") +
-                          "{\"success\":false,\"error\":\"Test callback not set\"}";
-            }
-        } else if (path.find("/api/test/performance") == 0) {
-            // Parse query parameters
-            std::string container_count = "3";
-            size_t query_pos = path.find("?");
-            if (query_pos != std::string::npos) {
-                std::string query = path.substr(query_pos + 1);
-                size_t count_pos = query.find("count=");
-                if (count_pos != std::string::npos) {
-                    size_t count_start = count_pos + 6;
-                    size_t count_end = query.find("&", count_start);
-                    if (count_end == std::string::npos) count_end = query.length();
-                    container_count = query.substr(count_start, count_end - count_start);
-                }
-            }
-            
-            if (performance_test_callback_) {
-                std::string result = performance_test_callback_(container_count);
-                response = "HTTP/1.1 200 OK\r\n"
-                          "Content-Type: application/json\r\n"
-                          "Access-Control-Allow-Origin: *\r\n"
-                          "Connection: close\r\n\r\n" +
-                          result;
-            } else {
-                response = std::string("HTTP/1.1 200 OK\r\n"
-                          "Content-Type: application/json\r\n"
-                          "Access-Control-Allow-Origin: *\r\n"
-                          "Connection: close\r\n\r\n") +
-                          "{\"success\":false,\"error\":\"Performance test callback not set\"}";
-            }
         } else {
             response = "HTTP/1.1 404 Not Found\r\n"
                       "Content-Type: text/plain\r\n"
@@ -633,36 +589,6 @@ std::string WebServer::generateHTML() {
         </div>
 
         <div class="card">
-            <h2>تست جامع مفاهیم</h2>
-            <p style="margin-bottom: 15px; color: #666;">این تست تمام مفاهیم سیستم‌عامل را نمایش می‌دهد:</p>
-            <ul style="margin-bottom: 15px; color: #666; padding-right: 20px;">
-                <li>ایزولاسیون فضای نام (PID, Mount, UTS)</li>
-                <li>مدیریت منابع با cgroups</li>
-                <li>ایزولاسیون فایل‌سیستم با chroot</li>
-                <li>چرخه حیات کانتینر</li>
-            </ul>
-            <button class="btn" id="test-btn" onclick="runComprehensiveTest()">اجرای تست جامع</button>
-            <div id="test-results" class="test-results" style="display: none;"></div>
-        </div>
-
-        <div class="card">
-            <h2>تست عملکرد (Performance Test)</h2>
-            <p style="margin-bottom: 15px; color: #666;">این تست عملکرد کانتینرها را با محدودیت‌های CPU و RAM اندازه‌گیری می‌کند:</p>
-            <ul style="margin-bottom: 15px; color: #666; padding-right: 20px;">
-                <li>ایجاد کانتینرهای متعدد با محدودیت‌های مختلف</li>
-                <li>اجرای محاسبات CPU-intensive در هر کانتینر</li>
-                <li>اندازه‌گیری زمان اجرا، استفاده CPU و RAM</li>
-                <li>مقایسه عملکرد با محدودیت‌های مختلف</li>
-            </ul>
-            <div class="form-group">
-                <label for="test-count">تعداد کانتینرها:</label>
-                <input type="number" id="test-count" value="3" min="1" max="10" style="width: 100px;">
-            </div>
-            <button class="btn" id="perf-test-btn" onclick="runPerformanceTest()">اجرای تست عملکرد</button>
-            <div id="perf-test-results" class="test-results" style="display: none;"></div>
-        </div>
-
-        <div class="card">
             <h2>لیست کانتینرها</h2>
             <div id="container-list" class="container-list">
                 <div class="status info">در حال بارگذاری...</div>
@@ -812,105 +738,6 @@ std::string WebServer::generateHTML() {
                 btn.textContent = originalText;
             });
         });
-
-        function runComprehensiveTest() {
-            const btn = document.getElementById('test-btn');
-            const resultsDiv = document.getElementById('test-results');
-            const originalText = btn.textContent;
-
-            btn.disabled = true;
-            btn.textContent = 'در حال اجرای تست...';
-            resultsDiv.style.display = 'block';
-            resultsDiv.innerHTML = '<div class="test-step info">در حال شروع تست جامع...</div>';
-
-            fetch('/api/test/comprehensive')
-                .then(response => response.json())
-                .then(data => {
-                    resultsDiv.innerHTML = '';
-                    if (data.success && data.steps) {
-                        data.steps.forEach(step => {
-                            const stepDiv = document.createElement('div');
-                            stepDiv.className = `test-step ${step.status}`;
-                            stepDiv.innerHTML = `
-                                <strong>${step.name}</strong>
-                                <div style="margin-top: 5px; font-size: 13px;">${step.description}</div>
-                                ${step.details ? `<div style="margin-top: 5px; font-size: 12px; color: #666;">${step.details}</div>` : ''}
-                            `;
-                            resultsDiv.appendChild(stepDiv);
-                        });
-                    } else {
-                        resultsDiv.innerHTML = `<div class="test-step error">خطا: ${data.error || 'خطای نامشخص'}</div>`;
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    resultsDiv.innerHTML = `<div class="test-step error">خطا در ارتباط با سرور</div>`;
-                })
-                .finally(() => {
-                    btn.disabled = false;
-                    btn.textContent = originalText;
-                });
-        }
-
-        function runPerformanceTest() {
-            const btn = document.getElementById('perf-test-btn');
-            const resultsDiv = document.getElementById('perf-test-results');
-            const count = document.getElementById('test-count').value;
-            const originalText = btn.textContent;
-
-            btn.disabled = true;
-            btn.textContent = 'در حال اجرای تست...';
-            resultsDiv.style.display = 'block';
-            resultsDiv.innerHTML = '<div class="test-step info">در حال شروع تست عملکرد...</div>';
-
-            fetch('/api/test/performance?count=' + count)
-                .then(response => response.json())
-                .then(data => {
-                    resultsDiv.innerHTML = '';
-                    if (data.success && data.results) {
-                        let summary = '<div class="test-step success"><strong>خلاصه نتایج:</strong><br>';
-                        summary += 'تعداد کانتینرها: ' + data.results.length + '<br>';
-                        let totalTime = 0;
-                        let totalCpu = 0;
-                        let totalMemory = 0;
-                        data.results.forEach(r => {
-                            totalTime += r.execution_time_ms;
-                            totalCpu += r.cpu_usage_ns;
-                            totalMemory += r.memory_usage_bytes;
-                        });
-                        summary += 'میانگین زمان اجرا: ' + (totalTime / data.results.length).toFixed(2) + ' ms<br>';
-                        summary += 'میانگین استفاده CPU: ' + (totalCpu / data.results.length / 1000000).toFixed(2) + ' ms<br>';
-                        summary += 'میانگین استفاده RAM: ' + (totalMemory / data.results.length / 1024 / 1024).toFixed(2) + ' MB</div>';
-                        resultsDiv.innerHTML = summary;
-
-                        data.results.forEach((result, index) => {
-                            const stepDiv = document.createElement('div');
-                            stepDiv.className = 'test-step success';
-                            stepDiv.innerHTML = `
-                                <strong>کانتینر ${index + 1} (${result.container_id})</strong>
-                                <div style="margin-top: 10px; font-size: 13px;">
-                                    <div><strong>محدودیت‌ها:</strong> CPU=${result.cpu_limit} shares, RAM=${result.memory_limit_mb} MB</div>
-                                    <div><strong>زمان اجرا:</strong> ${result.execution_time_ms.toFixed(2)} ms</div>
-                                    <div><strong>استفاده CPU:</strong> ${(result.cpu_usage_ns / 1000000).toFixed(2)} ms</div>
-                                    <div><strong>استفاده RAM:</strong> ${(result.memory_usage_bytes / 1024 / 1024).toFixed(2)} MB</div>
-                                    <div><strong>نتیجه محاسبه:</strong> ${result.calculation_result}</div>
-                                </div>
-                            `;
-                            resultsDiv.appendChild(stepDiv);
-                        });
-                    } else {
-                        resultsDiv.innerHTML = `<div class="test-step error">خطا: ${data.error || 'خطای نامشخص'}</div>`;
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    resultsDiv.innerHTML = '<div class="test-step error">خطا در ارتباط با سرور</div>';
-                })
-                .finally(() => {
-                    btn.disabled = false;
-                    btn.textContent = originalText;
-                });
-        }
 
         // Auto refresh every 5 seconds
         refreshInterval = setInterval(refreshContainers, 5000);

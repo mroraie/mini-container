@@ -23,16 +23,12 @@ public:
     using ContainerListCallback = std::function<std::string()>;
     using ContainerInfoCallback = std::function<std::string(const std::string&)>;
     using ContainerRunCallback = std::function<std::string(const std::string&, const std::string&, const std::string&, const std::string&, const std::string&)>;
-    using ComprehensiveTestCallback = std::function<std::string()>;
-    using PerformanceTestCallback = std::function<std::string(const std::string&)>;
     using ExecutionLogCallback = std::function<std::string(const std::string&)>;
 
     void setContainerListCallback(ContainerListCallback cb) { list_callback_ = cb; }
     void setContainerInfoCallback(ContainerInfoCallback cb) { info_callback_ = cb; }
     void setContainerRunCallback(ContainerRunCallback cb) { run_callback_ = cb; }
     void setRunCallback(ContainerRunCallback cb) { run_callback_ = cb; } // Alias for convenience
-    void setComprehensiveTestCallback(ComprehensiveTestCallback cb) { test_callback_ = cb; }
-    void setPerformanceTestCallback(PerformanceTestCallback cb) { performance_test_callback_ = cb; }
     void setExecutionLogCallback(ExecutionLogCallback cb) { execution_log_callback_ = cb; }
 
     // Execution tracking methods
@@ -55,8 +51,6 @@ private:
     ContainerListCallback list_callback_;
     ContainerInfoCallback info_callback_;
     ContainerRunCallback run_callback_;
-    ComprehensiveTestCallback test_callback_;
-    PerformanceTestCallback performance_test_callback_;
     ExecutionLogCallback execution_log_callback_;
 
     // Execution tracking
