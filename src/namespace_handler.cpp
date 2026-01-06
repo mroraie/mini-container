@@ -45,23 +45,45 @@ int namespace_set_hostname(const char *hostname) {
 
 static int setup_container_filesystem(const namespace_config_t *config) {
     (void)config;  // Suppress unused parameter warning
-    if (mount("proc", "/proc", "proc", 0, nullptr) == -1) {
-        perror("mount proc failed");
+
+    // Make mount propagation private inside the new mount namespace so mounts
+    // don't leak back to the host or siblings.
+    if (mount(nullptr, "/", nullptr, MS_REC | MS_PRIVATE, nullptr) == -1) {
+        perror("mount propagation private failed");
         return -1;
     }
 
-    if (mount("sysfs", "/sys", "sysfs", 0, nullptr) == -1) {
-        perror("mount sysfs failed");
+    auto mount_or_ignore_ebusy = [](const char *source, const char *target,
+                                    const char *fstype, unsigned long flags) {
+        if (mount(source, target, fstype, flags, nullptr) == -1) {
+            if (errno == EBUSY) {
+                // Already mounted (common for /sys or /proc in cloned namespaces).
+                return 0;
+            }
+            perror("mount failed");
+            return -1;
+        }
+        return 0;
+    };
+
+    if (mount_or_ignore_ebusy("proc", "/proc", "proc", 0) == -1) {
+        fprintf(stderr, "mount proc failed\n");
         return -1;
     }
 
-    if (mount("tmpfs", "/tmp", "tmpfs", 0, nullptr) == -1) {
-        perror("mount tmpfs failed");
+    if (mount_or_ignore_ebusy("sysfs", "/sys", "sysfs",
+                              MS_NOSUID | MS_NOEXEC | MS_NODEV) == -1) {
+        fprintf(stderr, "mount sysfs failed\n");
         return -1;
     }
 
-    if (mount("dev", "/dev", "devtmpfs", 0, nullptr) == -1) {
-        perror("mount devtmpfs failed");
+    if (mount_or_ignore_ebusy("tmpfs", "/tmp", "tmpfs", 0) == -1) {
+        fprintf(stderr, "mount tmpfs failed\n");
+        return -1;
+    }
+
+    if (mount_or_ignore_ebusy("dev", "/dev", "devtmpfs", 0) == -1) {
+        fprintf(stderr, "mount devtmpfs failed\n");
         return -1;
     }
 

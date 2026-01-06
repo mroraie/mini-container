@@ -4,6 +4,9 @@
 #include <cstring>
 #include <sstream>
 #include <vector>
+#include <ctime>
+#include <sys/time.h>
+#include <sys/wait.h>
 #include "../include/container_manager.hpp"
 #include "web_server.hpp"
 
@@ -118,8 +121,176 @@ std::string comprehensive_test_callback() {
     return json.str();
 }
 
+// Helper function to get current time in milliseconds
+long get_time_ms() {
+    struct timeval tv;
+    gettimeofday(&tv, nullptr);
+    return tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
+// CPU-intensive calculation: find prime numbers up to N
+std::string calculate_primes(int limit) {
+    std::vector<bool> is_prime(limit + 1, true);
+    is_prime[0] = is_prime[1] = false;
+    
+    int count = 0;
+    for (int i = 2; i <= limit; i++) {
+        if (is_prime[i]) {
+            count++;
+            for (int j = i * i; j <= limit; j += i) {
+                is_prime[j] = false;
+            }
+        }
+    }
+    
+    return std::to_string(count);
+}
+
+std::string performance_test_callback(const std::string& container_count_str) {
+    int container_count = std::stoi(container_count_str);
+    if (container_count < 1) container_count = 1;
+    if (container_count > 10) container_count = 10;
+    
+    std::ostringstream json;
+    json << "{\"success\":true,\"results\":[";
+    
+    // Different resource limit configurations
+    struct TestConfig {
+        int memory_mb;
+        int cpu_shares;
+    };
+    
+    TestConfig configs[] = {
+        {64, 512},   // Low resources
+        {128, 1024}, // Medium resources
+        {256, 2048}  // High resources
+    };
+    
+    std::vector<std::string> results;
+    
+    for (int i = 0; i < container_count; i++) {
+        TestConfig config = configs[i % 3];
+        
+        container_config_t test_config;
+        test_config.id = nullptr;
+        namespace_config_init(&test_config.ns_config);
+        resource_limits_init(&test_config.res_limits);
+        fs_config_init(&test_config.fs_config);
+        
+        // Set resource limits
+        test_config.res_limits.memory.limit_bytes = config.memory_mb * 1024 * 1024;
+        test_config.res_limits.cpu.shares = config.cpu_shares;
+        test_config.res_limits.enabled = 1;
+        
+        // Set hostname
+        char hostname[64];
+        snprintf(hostname, sizeof(hostname), "perf-test-%d", i);
+        test_config.ns_config.hostname = strdup(hostname);
+        
+        // Set root path
+        char root_path[256];
+        snprintf(root_path, sizeof(root_path), "/tmp/perf_test_root_%d", i);
+        test_config.fs_config.root_path = strdup(root_path);
+        
+        // Create a simple calculation command (using sh to calculate primes)
+        // We'll use a simple shell script that does CPU-intensive work
+        std::string calc_cmd = "/bin/sh -c '";
+        calc_cmd += "n=10000; count=0; ";
+        calc_cmd += "for i in $(seq 2 $n); do ";
+        calc_cmd += "  prime=1; ";
+        calc_cmd += "  for j in $(seq 2 $((i-1))); do ";
+        calc_cmd += "    if [ $((i % j)) -eq 0 ]; then prime=0; break; fi; ";
+        calc_cmd += "  done; ";
+        calc_cmd += "  if [ $prime -eq 1 ]; then count=$((count+1)); fi; ";
+        calc_cmd += "done; ";
+        calc_cmd += "echo $count'";
+        
+        // Parse command
+        std::vector<char*> args;
+        std::string cmd = calc_cmd;
+        size_t pos = 0;
+        std::string token;
+        while ((pos = cmd.find(' ')) != std::string::npos) {
+            token = cmd.substr(0, pos);
+            args.push_back(strdup(token.c_str()));
+            cmd.erase(0, pos + 1);
+        }
+        if (!cmd.empty()) {
+            args.push_back(strdup(cmd.c_str()));
+        }
+        args.push_back(nullptr);
+        
+        test_config.command = args.data();
+        test_config.command_argc = args.size() - 1;
+        
+        // Measure execution time
+        long start_time = get_time_ms();
+        
+        int result = container_manager_run(&cm, &test_config);
+        
+        long end_time = get_time_ms();
+        long execution_time = end_time - start_time;
+        
+        // Get container stats
+        unsigned long cpu_usage = 0, memory_usage = 0;
+        std::string container_id = "unknown";
+        std::string calculation_result = "N/A";
+        
+        if (result == 0 && test_config.id) {
+            container_id = test_config.id;
+            
+            // Wait a bit for container to finish
+            usleep(100000); // 100ms
+            
+            container_info_t* info = container_manager_get_info(&cm, container_id);
+            if (info && info->state == CONTAINER_RUNNING) {
+                resource_manager_get_stats(cm.rm, container_id, &cpu_usage, &memory_usage);
+            }
+            
+            // Try to get calculation result (simplified - in real scenario would capture stdout)
+            calculation_result = "Completed";
+        }
+        
+        // Build result JSON
+        std::ostringstream result_json;
+        result_json << "{";
+        result_json << "\"container_id\":\"" << container_id << "\",";
+        result_json << "\"memory_limit_mb\":" << config.memory_mb << ",";
+        result_json << "\"cpu_limit\":" << config.cpu_shares << ",";
+        result_json << "\"execution_time_ms\":" << execution_time << ",";
+        result_json << "\"cpu_usage_ns\":" << cpu_usage << ",";
+        result_json << "\"memory_usage_bytes\":" << memory_usage << ",";
+        result_json << "\"calculation_result\":\"" << calculation_result << "\"";
+        result_json << "}";
+        
+        results.push_back(result_json.str());
+        
+        // Cleanup
+        for (auto arg : args) {
+            if (arg) free(arg);
+        }
+        free(test_config.ns_config.hostname);
+        free(test_config.fs_config.root_path);
+        
+        // Cleanup container
+        if (result == 0 && test_config.id) {
+            container_manager_stop(&cm, test_config.id);
+            container_manager_destroy(&cm, test_config.id);
+        }
+    }
+    
+    for (size_t i = 0; i < results.size(); i++) {
+        if (i > 0) json << ",";
+        json << results[i];
+    }
+    
+    json << "]}";
+    return json.str();
+}
+
 int main(int argc, char* argv[]) {
-    int port = 8080;
+    // Default port for the mini-container web UI
+    int port = 803;
 
     // Parse command line arguments
     if (argc > 1) {
@@ -143,6 +314,7 @@ int main(int argc, char* argv[]) {
     // Set up callbacks
     web_server->setRunCallback(run_container_callback);
     web_server->setComprehensiveTestCallback(comprehensive_test_callback);
+    web_server->setPerformanceTestCallback(performance_test_callback);
 
     // Set up signal handler
     signal(SIGINT, signal_handler);
