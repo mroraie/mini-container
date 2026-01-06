@@ -24,8 +24,11 @@ using namespace std;
 
 // Macro for debug logging
 #define DEBUG_LOG(rm, fmt, ...) do { \
-    char debug_msg[BUF_SIZE * 2]; \
-    snprintf(debug_msg, sizeof(debug_msg), fmt, ##__VA_ARGS__); \
+    char debug_msg[BUF_SIZE * 4]; \
+    int len = snprintf(debug_msg, sizeof(debug_msg), fmt, ##__VA_ARGS__); \
+    if (len >= (int)sizeof(debug_msg)) { \
+        debug_msg[sizeof(debug_msg) - 1] = '\0'; \
+    } \
     if ((rm) && (rm)->debug_log_callback) { \
         (rm)->debug_log_callback(debug_msg); \
     } else { \

@@ -35,6 +35,10 @@ public:
     void addExecutionLog(const std::string& container_id, const std::string& message);
     std::string getExecutionLogs(const std::string& container_id);
 
+    // Debug logging methods
+    void addDebugLog(const std::string& message);
+    std::string getDebugLogsJSON();
+
 private:
     void serverThread();
     std::string handleRequest(const std::string& request);
@@ -63,9 +67,6 @@ private:
     std::vector<std::string> debug_logs_;
     std::mutex debug_logs_mutex_;
     static const size_t MAX_DEBUG_LOGS = 1000;
-    
-    void addDebugLog(const std::string& message);
-    std::string getDebugLogsJSON();
 };
 
 #endif // WEB_SERVER_HPP
