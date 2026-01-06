@@ -40,6 +40,7 @@ private:
     std::string handleRequest(const std::string& request);
     std::string generateHTML();
     std::string generateMonitorHTML();
+    std::string generateTestsHTML();
     std::string getContainerListJSON();
     std::string getContainerInfoJSON(const std::string& id);
 

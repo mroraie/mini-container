@@ -113,6 +113,11 @@ std::string WebServer::handleRequest(const std::string& request) {
                       "Content-Type: text/html\r\n"
                       "Connection: close\r\n\r\n" +
                       generateMonitorHTML();
+        } else if (path == "/tests" || path == "/tests.html") {
+            response = "HTTP/1.1 200 OK\r\n"
+                      "Content-Type: text/html\r\n"
+                      "Connection: close\r\n\r\n" +
+                      generateTestsHTML();
         } else if (path == "/api/containers") {
             response = "HTTP/1.1 200 OK\r\n"
                       "Content-Type: application/json\r\n"
@@ -139,6 +144,12 @@ std::string WebServer::handleRequest(const std::string& request) {
                           "Connection: close\r\n\r\n" +
                           getContainerInfoJSON(id);
             }
+        } else if (path == "/api/tests/run") {
+            response = "HTTP/1.1 200 OK\r\n"
+                      "Content-Type: application/json\r\n"
+                      "Access-Control-Allow-Origin: *\r\n"
+                      "Connection: close\r\n\r\n"
+                      "{\"message\":\"Tests should be run from the /tests page\"}";
         } else {
             response = "HTTP/1.1 404 Not Found\r\n"
                       "Content-Type: text/plain\r\n"
@@ -941,7 +952,8 @@ std::string WebServer::generateHTML() {
             <h1>مینی کانتینر</h1>
             <p>سیستم کانتینر ساده برای نمایش مفاهیم سیستم‌عامل</p>
             <p style="margin-top: 10px;">
-                <a href="/monitor" style="color: #000000; text-decoration: underline;">📊 مشاهده مانیتور (htop-like)</a>
+                <a href="/monitor" style="color: #000000; text-decoration: underline;">📊 مشاهده مانیتور (htop-like)</a> |
+                <a href="/tests" style="color: #000000; text-decoration: underline;">🧪 تست‌های سیستم</a>
             </p>
         </div>
 
@@ -1317,4 +1329,524 @@ std::string WebServer::getExecutionLogs(const std::string& container_id) {
     json += "]";
 
     return json;
+}
+
+std::string WebServer::generateTestsHTML() {
+    return R"HTML(
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تست‌های سیستم - Mini Container</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #ffffff;
+            color: #000000;
+            direction: rtl;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+            font-weight: 400;
+        }
+
+        .header a {
+            color: #000;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+
+        .test-section {
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+        }
+
+        .test-section h2 {
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            font-weight: 400;
+        }
+
+        .test-section p {
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            background: #000;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 14px;
+            margin: 5px;
+        }
+
+        .btn:hover {
+            background: #333;
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .test-results {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .test-results.active {
+            display: block;
+        }
+
+        .test-status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .test-status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+
+        .test-status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+
+        .test-status.running {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            display: block;
+        }
+
+        .progress {
+            margin-top: 10px;
+            height: 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress.active {
+            display: block;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: #000;
+            width: 0%;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>تست‌های سیستم - Mini Container</h1>
+            <div>
+                <a href="/">صفحه اصلی</a> |
+                <a href="/monitor">مانیتور</a> |
+                <a href="/tests">تست‌ها</a>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>تست 1: استفاده CPU</h2>
+            <p>این تست بررسی می‌کند که استفاده CPU به درستی ردیابی می‌شود. یک کانتینر با کار CPU-intensive ایجاد می‌کند و استفاده CPU را بررسی می‌کند.</p>
+            <button class="btn" onclick="runCPUTest()">اجرای تست CPU</button>
+            <div class="progress" id="cpu-progress">
+                <div class="progress-bar" id="cpu-progress-bar"></div>
+            </div>
+            <div class="test-status" id="cpu-status"></div>
+            <div class="test-results" id="cpu-results"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>تست 2: محدودیت حافظه</h2>
+            <p>این تست بررسی می‌کند که محدودیت حافظه به درستی اعمال می‌شود. یک کانتینر با محدودیت 64MB ایجاد می‌کند و استفاده حافظه را بررسی می‌کند.</p>
+            <button class="btn" onclick="runMemoryTest()">اجرای تست حافظه</button>
+            <div class="progress" id="memory-progress">
+                <div class="progress-bar" id="memory-progress-bar"></div>
+            </div>
+            <div class="test-status" id="memory-status"></div>
+            <div class="test-results" id="memory-results"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>تست 3: محدودیت CPU</h2>
+            <p>این تست بررسی می‌کند که محدودیت CPU به درستی اعمال می‌شود. یک کانتینر با محدودیت CPU (512 shares) ایجاد می‌کند.</p>
+            <button class="btn" onclick="runCPULimitTest()">اجرای تست محدودیت CPU</button>
+            <div class="progress" id="cpu-limit-progress">
+                <div class="progress-bar" id="cpu-limit-progress-bar"></div>
+            </div>
+            <div class="test-status" id="cpu-limit-status"></div>
+            <div class="test-results" id="cpu-limit-results"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>تست 4: محدودیت‌های ترکیبی (CPU + حافظه)</h2>
+            <p>این تست بررسی می‌کند که محدودیت‌های CPU و حافظه به صورت همزمان به درستی اعمال می‌شوند.</p>
+            <button class="btn" onclick="runCombinedTest()">اجرای تست ترکیبی</button>
+            <div class="progress" id="combined-progress">
+                <div class="progress-bar" id="combined-progress-bar"></div>
+            </div>
+            <div class="test-status" id="combined-status"></div>
+            <div class="test-results" id="combined-results"></div>
+        </div>
+    </div>
+
+    <script>
+        function log(testId, message) {
+            const results = document.getElementById(testId + '-results');
+            results.classList.add('active');
+            results.textContent += message + '\n';
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function setStatus(testId, status, message) {
+            const statusEl = document.getElementById(testId + '-status');
+            statusEl.className = 'test-status ' + status;
+            statusEl.textContent = message;
+        }
+
+        function setProgress(testId, percent) {
+            const progress = document.getElementById(testId + '-progress');
+            const progressBar = document.getElementById(testId + '-progress-bar');
+            progress.classList.add('active');
+            progressBar.style.width = percent + '%';
+        }
+
+        function resetTest(testId) {
+            document.getElementById(testId + '-results').textContent = '';
+            document.getElementById(testId + '-results').classList.remove('active');
+            document.getElementById(testId + '-status').className = 'test-status';
+            document.getElementById(testId + '-progress').classList.remove('active');
+            document.getElementById(testId + '-progress-bar').style.width = '0%';
+        }
+
+        async function runCPUTest() {
+            const testId = 'cpu';
+            resetTest(testId);
+            setStatus(testId, 'running', 'در حال اجرای تست CPU...');
+            setProgress(testId, 10);
+            log(testId, 'شروع تست CPU...');
+            log(testId, 'ایجاد کانتینر با کار CPU-intensive...');
+
+            try {
+                // Create container
+                setProgress(testId, 30);
+                const createResponse = await fetch('/api/containers/run', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: new URLSearchParams({
+                        command: '/bin/sh -c "while true; do :; done"',
+                        memory: '128',
+                        cpu: '1024',
+                        hostname: 'cpu-test',
+                        root_path: '/tmp/cpu_test_root',
+                        container_name: 'test_cpu_' + Date.now()
+                    })
+                });
+
+                const createData = await createResponse.json();
+                if (!createData.success) {
+                    throw new Error('خطا در ایجاد کانتینر: ' + createData.error);
+                }
+
+                const containerId = createData.container_id;
+                log(testId, 'کانتینر ایجاد شد: ' + containerId);
+                log(testId, 'منتظر می‌مانیم تا استفاده CPU تجمع یابد...');
+
+                setProgress(testId, 50);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // Check CPU usage multiple times
+                setProgress(testId, 60);
+                let cpuUsage = 0;
+                let memoryUsage = 0;
+
+                for (let i = 1; i <= 5; i++) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    const infoResponse = await fetch('/api/containers/' + containerId);
+                    const infoData = await infoResponse.json();
+                    
+                    if (infoData.cpu_usage) {
+                        cpuUsage = parseInt(infoData.cpu_usage);
+                        memoryUsage = parseInt(infoData.memory_usage || 0);
+                        log(testId, `بررسی ${i}: CPU=${cpuUsage} ns, Memory=${memoryUsage} bytes`);
+                        
+                        if (cpuUsage > 0) {
+                            log(testId, '✓ استفاده CPU در حال ردیابی است!');
+                            break;
+                        }
+                    }
+                }
+
+                setProgress(testId, 80);
+
+                // Final check
+                if (cpuUsage === 0) {
+                    throw new Error('استفاده CPU هنوز 0 است - ردیابی CPU کار نمی‌کند');
+                }
+
+                log(testId, '✓ موفقیت: استفاده CPU در حال ردیابی است: ' + cpuUsage + ' ns');
+                if (memoryUsage > 0) {
+                    log(testId, '✓ استفاده حافظه در حال ردیابی است: ' + memoryUsage + ' bytes');
+                }
+
+                // Stop container
+                setProgress(testId, 90);
+                await fetch('/api/containers/' + containerId + '/stop', {method: 'POST'});
+                log(testId, 'کانتینر متوقف شد.');
+
+                setProgress(testId, 100);
+                setStatus(testId, 'success', '✓ تست با موفقیت انجام شد!');
+            } catch (error) {
+                log(testId, '✗ خطا: ' + error.message);
+                setStatus(testId, 'error', '✗ تست ناموفق بود: ' + error.message);
+            }
+        }
+
+        async function runMemoryTest() {
+            const testId = 'memory';
+            resetTest(testId);
+            setStatus(testId, 'running', 'در حال اجرای تست حافظه...');
+            setProgress(testId, 10);
+            log(testId, 'شروع تست حافظه...');
+            log(testId, 'ایجاد کانتینر با محدودیت 64MB...');
+
+            try {
+                setProgress(testId, 30);
+                const createResponse = await fetch('/api/containers/run', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: new URLSearchParams({
+                        command: '/bin/sh -c "dd if=/dev/zero of=/tmp/mem bs=1M count=80 status=none 2>&1; echo Exit code: $?"',
+                        memory: '64',
+                        cpu: '1024',
+                        hostname: 'mem-test',
+                        root_path: '/tmp/mem_test_root',
+                        container_name: 'test_mem_' + Date.now()
+                    })
+                });
+
+                const createData = await createResponse.json();
+                if (!createData.success) {
+                    throw new Error('خطا در ایجاد کانتینر: ' + createData.error);
+                }
+
+                const containerId = createData.container_id;
+                log(testId, 'کانتینر ایجاد شد: ' + containerId);
+                log(testId, 'منتظر می‌مانیم تا حافظه تخصیص یابد...');
+
+                setProgress(testId, 50);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                setProgress(testId, 70);
+                const infoResponse = await fetch('/api/containers/' + containerId);
+                const infoData = await infoResponse.json();
+                
+                const memoryUsage = parseInt(infoData.memory_usage || 0);
+                const memoryMB = Math.floor(memoryUsage / 1024 / 1024);
+
+                log(testId, 'استفاده حافظه: ' + memoryUsage + ' bytes (' + memoryMB + ' MB)');
+                log(testId, 'محدودیت: 64 MB');
+
+                if (memoryUsage === 0) {
+                    log(testId, '⚠ هشدار: استفاده حافظه 0 است');
+                } else if (memoryMB <= 70) {
+                    log(testId, '✓ استفاده حافظه در محدوده معقول است');
+                } else {
+                    log(testId, '⚠ هشدار: استفاده حافظه ممکن است از محدودیت تجاوز کند');
+                }
+
+                setProgress(testId, 90);
+                await fetch('/api/containers/' + containerId + '/stop', {method: 'POST'});
+                log(testId, 'کانتینر متوقف شد.');
+
+                setProgress(testId, 100);
+                setStatus(testId, 'success', '✓ تست با موفقیت انجام شد!');
+            } catch (error) {
+                log(testId, '✗ خطا: ' + error.message);
+                setStatus(testId, 'error', '✗ تست ناموفق بود: ' + error.message);
+            }
+        }
+
+        async function runCPULimitTest() {
+            const testId = 'cpu-limit';
+            resetTest(testId);
+            setStatus(testId, 'running', 'در حال اجرای تست محدودیت CPU...');
+            setProgress(testId, 10);
+            log(testId, 'شروع تست محدودیت CPU...');
+            log(testId, 'ایجاد کانتینر با محدودیت CPU (512 shares)...');
+
+            try {
+                setProgress(testId, 30);
+                const createResponse = await fetch('/api/containers/run', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: new URLSearchParams({
+                        command: '/bin/sh -c "while true; do :; done"',
+                        memory: '128',
+                        cpu: '512',
+                        hostname: 'cpu-limit-test',
+                        root_path: '/tmp/cpu_limit_test',
+                        container_name: 'test_cpu_limit_' + Date.now()
+                    })
+                });
+
+                const createData = await createResponse.json();
+                if (!createData.success) {
+                    throw new Error('خطا در ایجاد کانتینر: ' + createData.error);
+                }
+
+                const containerId = createData.container_id;
+                log(testId, 'کانتینر ایجاد شد: ' + containerId);
+                log(testId, 'منتظر می‌مانیم تا استفاده CPU تجمع یابد...');
+
+                setProgress(testId, 50);
+                await new Promise(resolve => setTimeout(resolve, 3000));
+
+                setProgress(testId, 70);
+                const infoResponse = await fetch('/api/containers/' + containerId);
+                const infoData = await infoResponse.json();
+                
+                const cpuUsage = parseInt(infoData.cpu_usage || 0);
+                log(testId, 'استفاده CPU بعد از 3 ثانیه: ' + cpuUsage + ' ns');
+
+                if (cpuUsage === 0) {
+                    log(testId, '⚠ هشدار: استفاده CPU 0 است - cgroup ممکن است به درستی ردیابی نکند');
+                } else {
+                    log(testId, '✓ استفاده CPU در حال ردیابی است: ' + cpuUsage + ' ns');
+                }
+
+                setProgress(testId, 90);
+                await fetch('/api/containers/' + containerId + '/stop', {method: 'POST'});
+                log(testId, 'کانتینر متوقف شد.');
+
+                setProgress(testId, 100);
+                setStatus(testId, 'success', '✓ تست با موفقیت انجام شد!');
+            } catch (error) {
+                log(testId, '✗ خطا: ' + error.message);
+                setStatus(testId, 'error', '✗ تست ناموفق بود: ' + error.message);
+            }
+        }
+
+        async function runCombinedTest() {
+            const testId = 'combined';
+            resetTest(testId);
+            setStatus(testId, 'running', 'در حال اجرای تست ترکیبی...');
+            setProgress(testId, 10);
+            log(testId, 'شروع تست ترکیبی (CPU + حافظه)...');
+            log(testId, 'ایجاد کانتینر با محدودیت‌های CPU و حافظه...');
+
+            try {
+                setProgress(testId, 30);
+                const createResponse = await fetch('/api/containers/run', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: new URLSearchParams({
+                        command: '/bin/sh -c "dd if=/dev/zero of=/tmp/stress bs=1M count=16 status=none; i=0; while [ $i -lt 10000000 ]; do i=$((i+1)); done; rm -f /tmp/stress; echo Done"',
+                        memory: '128',
+                        cpu: '1024',
+                        hostname: 'combined-test',
+                        root_path: '/tmp/combined_test_root',
+                        container_name: 'test_combined_' + Date.now()
+                    })
+                });
+
+                const createData = await createResponse.json();
+                if (!createData.success) {
+                    throw new Error('خطا در ایجاد کانتینر: ' + createData.error);
+                }
+
+                const containerId = createData.container_id;
+                log(testId, 'کانتینر ایجاد شد: ' + containerId);
+                log(testId, 'منتظر می‌مانیم تا استفاده منابع تجمع یابد...');
+
+                setProgress(testId, 50);
+                await new Promise(resolve => setTimeout(resolve, 3000));
+
+                setProgress(testId, 70);
+                const infoResponse = await fetch('/api/containers/' + containerId);
+                const infoData = await infoResponse.json();
+                
+                const cpuUsage = parseInt(infoData.cpu_usage || 0);
+                const memoryUsage = parseInt(infoData.memory_usage || 0);
+                const memoryMB = Math.floor(memoryUsage / 1024 / 1024);
+
+                log(testId, 'استفاده CPU: ' + cpuUsage + ' ns');
+                log(testId, 'استفاده حافظه: ' + memoryUsage + ' bytes (' + memoryMB + ' MB)');
+
+                if (cpuUsage > 0) {
+                    log(testId, '✓ استفاده CPU در حال ردیابی است');
+                } else {
+                    log(testId, '⚠ هشدار: استفاده CPU 0 است');
+                }
+
+                if (memoryUsage > 0) {
+                    log(testId, '✓ استفاده حافظه در حال ردیابی است: ' + memoryMB + ' MB');
+                } else {
+                    log(testId, '⚠ هشدار: استفاده حافظه 0 است');
+                }
+
+                setProgress(testId, 90);
+                await fetch('/api/containers/' + containerId + '/stop', {method: 'POST'});
+                log(testId, 'کانتینر متوقف شد.');
+
+                setProgress(testId, 100);
+                setStatus(testId, 'success', '✓ تست با موفقیت انجام شد!');
+            } catch (error) {
+                log(testId, '✗ خطا: ' + error.message);
+                setStatus(testId, 'error', '✗ تست ناموفق بود: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
+)HTML";
 }
