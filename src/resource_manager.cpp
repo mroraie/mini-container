@@ -68,16 +68,24 @@ static cgroup_version_t detect_cgroup_version() {
     return CGROUP_V1; // Default fallback
 }
 
-static int write_file(const char *path, const char *value) {
+static int write_file(const char *path, const char *value, resource_manager_t *rm = nullptr) {
     int fd = open(path, O_WRONLY);
     if (fd == -1) {
-        perror("open cgroup file failed");
+        if (rm) {
+            DEBUG_LOG(rm, "Error: failed to open cgroup file %s for writing: %s\n", path, strerror(errno));
+        } else {
+            perror("open cgroup file failed");
+        }
         return -1;
     }
 
     ssize_t written = write(fd, value, strlen(value));
     if (written == -1) {
-        perror("write to cgroup file failed");
+        if (rm) {
+            DEBUG_LOG(rm, "Error: failed to write to cgroup file %s: %s\n", path, strerror(errno));
+        } else {
+            perror("write to cgroup file failed");
+        }
         close(fd);
         return -1;
     }
@@ -86,24 +94,35 @@ static int write_file(const char *path, const char *value) {
     return 0;
 }
 
-static int read_file(const char *path, char *buffer, size_t size) {
+static int read_file(const char *path, char *buffer, size_t size, resource_manager_t *rm = nullptr) {
     int fd = open(path, O_RDONLY);
     if (fd == -1) {
         // Don't print error for missing files (they might not exist yet)
         if (errno != ENOENT) {
-            fprintf(stderr, "Warning: failed to open cgroup file %s: %s\n", path, strerror(errno));
+            if (rm) {
+                DEBUG_LOG(rm, "Warning: failed to open cgroup file %s: %s\n", path, strerror(errno));
+            } else {
+                fprintf(stderr, "Warning: failed to open cgroup file %s: %s\n", path, strerror(errno));
+            }
         }
         return -1;
     }
 
     ssize_t read_bytes = read(fd, buffer, size - 1);
     if (read_bytes == -1) {
-        fprintf(stderr, "Warning: failed to read from cgroup file %s: %s\n", path, strerror(errno));
+        if (rm) {
+            DEBUG_LOG(rm, "Warning: failed to read from cgroup file %s: %s\n", path, strerror(errno));
+        } else {
+            fprintf(stderr, "Warning: failed to read from cgroup file %s: %s\n", path, strerror(errno));
+        }
         close(fd);
         return -1;
     }
 
     if (read_bytes == 0) {
+        if (rm) {
+            DEBUG_LOG(rm, "Warning: cgroup file %s is empty\n", path);
+        }
         close(fd);
         return -1;
     }
@@ -125,13 +144,13 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
             int period_us = limits->period_us > 0 ? limits->period_us : 100000;
             snprintf(path, sizeof(path), "%s/%s_%s/cpu.max", CGROUP_ROOT, rm->cgroup_path, container_id);
             snprintf(value, sizeof(value), "%d %d", limits->quota_us, period_us);
-            if (write_file(path, value) != 0) {
+            if (write_file(path, value, rm) != 0) {
                 return -1;
             }
         } else {
             // Unlimited CPU
             snprintf(path, sizeof(path), "%s/%s_%s/cpu.max", CGROUP_ROOT, rm->cgroup_path, container_id);
-            if (write_file(path, "max") != 0) {
+            if (write_file(path, "max", rm) != 0) {
                 return -1;
             }
         }
@@ -143,7 +162,7 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
             if (weight > 10000) weight = 10000;
             snprintf(path, sizeof(path), "%s/%s_%s/cpu.weight", CGROUP_ROOT, rm->cgroup_path, container_id);
             snprintf(value, sizeof(value), "%d", weight);
-            if (write_file(path, value) != 0) {
+            if (write_file(path, value, rm) != 0) {
                 return -1;
             }
         }
@@ -163,7 +182,7 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
                 return -1;
             }
             snprintf(value, sizeof(value), "%d", limits->shares);
-            if (write_file(path, value) != 0) {
+            if (write_file(path, value, rm) != 0) {
                 return -1;
             }
         }
@@ -174,7 +193,7 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
                 return -1;
             }
             snprintf(value, sizeof(value), "%d", limits->quota_us);
-            if (write_file(path, value) != 0) {
+            if (write_file(path, value, rm) != 0) {
                 return -1;
             }
 
@@ -183,7 +202,7 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
                 return -1;
             }
             snprintf(value, sizeof(value), "%d", limits->period_us > 0 ? limits->period_us : 100000);
-            if (write_file(path, value) != 0) {
+            if (write_file(path, value, rm) != 0) {
                 return -1;
             }
         }
@@ -202,13 +221,13 @@ static int set_memory_limits(resource_manager_t *rm, const char *container_id,
         if (limits->limit_bytes > 0) {
             snprintf(path, sizeof(path), "%s/%s_%s/memory.max", CGROUP_ROOT, rm->cgroup_path, container_id);
             snprintf(value, sizeof(value), "%lu", limits->limit_bytes);
-            if (write_file(path, value) != 0) {
+            if (write_file(path, value, rm) != 0) {
                 return -1;
             }
         } else {
             // Unlimited memory
             snprintf(path, sizeof(path), "%s/%s_%s/memory.max", CGROUP_ROOT, rm->cgroup_path, container_id);
-            if (write_file(path, "max") != 0) {
+            if (write_file(path, "max", rm) != 0) {
                 return -1;
             }
         }
@@ -217,7 +236,7 @@ static int set_memory_limits(resource_manager_t *rm, const char *container_id,
         if (limits->swap_limit_bytes > 0) {
             snprintf(path, sizeof(path), "%s/%s_%s/memory.swap.max", CGROUP_ROOT, rm->cgroup_path, container_id);
             snprintf(value, sizeof(value), "%lu", limits->swap_limit_bytes);
-            if (write_file(path, value) != 0) {
+            if (write_file(path, value, rm) != 0) {
                 return -1;
             }
         }
@@ -226,7 +245,7 @@ static int set_memory_limits(resource_manager_t *rm, const char *container_id,
         if (limits->limit_bytes > 0) {
             snprintf(path, sizeof(path), "%s/%s_%s/memory.limit_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
             snprintf(value, sizeof(value), "%lu", limits->limit_bytes);
-            if (write_file(path, value) != 0) {
+            if (write_file(path, value, rm) != 0) {
                 return -1;
             }
         }
@@ -234,7 +253,7 @@ static int set_memory_limits(resource_manager_t *rm, const char *container_id,
         if (limits->swap_limit_bytes > 0) {
             snprintf(path, sizeof(path), "%s/%s_%s/memory.memsw.limit_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
             snprintf(value, sizeof(value), "%lu", limits->swap_limit_bytes);
-            if (write_file(path, value) != 0) {
+            if (write_file(path, value, rm) != 0) {
                 return -1;
             }
         }
@@ -267,7 +286,7 @@ int resource_manager_init(resource_manager_t *rm, const char *base_path) {
         }
         // Verify CPU and memory controllers are enabled
         char buffer[BUF_SIZE];
-        if (read_file(controllers_path, buffer, sizeof(buffer)) == 0) {
+        if (read_file(controllers_path, buffer, sizeof(buffer), rm) == 0) {
             if (strstr(buffer, "cpu") == nullptr || strstr(buffer, "memory") == nullptr) {
                 fprintf(stderr, "Error: CPU or memory controllers not enabled in cgroup2\n");
                 return -1;
@@ -369,7 +388,7 @@ int resource_manager_add_process(resource_manager_t *rm,
         // cgroup2 uses cgroup.procs
         snprintf(path, sizeof(path), "%s/%s_%s/cgroup.procs", CGROUP_ROOT, rm->cgroup_path, container_id);
         DEBUG_LOG(rm, "Debug: Adding process %d to cgroup v2: %s\n", pid, path);
-        if (write_file(path, pid_str) != 0) {
+        if (write_file(path, pid_str, rm) != 0) {
             DEBUG_LOG(rm, "Warning: failed to add process %d to cgroup v2: %s (errno=%d: %s)\n", pid, path, errno, strerror(errno));
             return -1;
         }
@@ -381,14 +400,14 @@ int resource_manager_add_process(resource_manager_t *rm,
         // Try cpu,cpuacct first (most common)
         snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
         DEBUG_LOG(rm, "Debug: Trying to add process %d to cgroup v1: %s\n", pid, path);
-        if (write_file(path, pid_str) == 0) {
+        if (write_file(path, pid_str, rm) == 0) {
             added = 1;
             DEBUG_LOG(rm, "Debug: Successfully added process %d to cpu,cpuacct cgroup\n", pid);
         } else {
             DEBUG_LOG(rm, "Debug: Failed to add to cpu,cpuacct (errno=%d: %s), trying fallback...\n", errno, strerror(errno));
             // Fallback to separate cpu and cpuacct
             snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-            if (write_file(path, pid_str) == 0) {
+            if (write_file(path, pid_str, rm) == 0) {
                 added = 1;
                 DEBUG_LOG(rm, "Debug: Successfully added process %d to CPU cgroup\n", pid);
             } else {
@@ -396,7 +415,7 @@ int resource_manager_add_process(resource_manager_t *rm,
             }
             
             snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
-            if (write_file(path, pid_str) == 0) {
+            if (write_file(path, pid_str, rm) == 0) {
                 added = 1;
                 DEBUG_LOG(rm, "Debug: Successfully added process %d to cpuacct cgroup\n", pid);
             } else {
@@ -411,7 +430,7 @@ int resource_manager_add_process(resource_manager_t *rm,
 
         snprintf(path, sizeof(path), "%s/%s_%s/tasks", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
         DEBUG_LOG(rm, "Debug: Adding process %d to memory cgroup: %s\n", pid, path);
-        if (write_file(path, pid_str) != 0) {
+        if (write_file(path, pid_str, rm) != 0) {
             DEBUG_LOG(rm, "Warning: failed to add process %d to memory cgroup: %s (errno=%d: %s)\n", pid, path, errno, strerror(errno));
             // Don't fail completely if memory cgroup fails
         } else {
@@ -484,7 +503,7 @@ int resource_manager_get_stats(resource_manager_t *rm,
             // cgroup2: read from cpu.stat (format: usage_usec <value>)
             snprintf(path, sizeof(path), "%s/%s_%s/cpu.stat", CGROUP_ROOT, rm->cgroup_path, container_id);
             DEBUG_LOG(rm, "Debug: Attempting to read cpu.stat from %s\n", path);
-            if (read_file(path, buffer, sizeof(buffer)) == 0) {
+            if (read_file(path, buffer, sizeof(buffer), rm) == 0) {
                 DEBUG_LOG(rm, "Debug: Successfully read cpu.stat, content length: %zu, content: '%s'\n", strlen(buffer), buffer);
                 // Parse usage_usec from cpu.stat
                 // Format: usage_usec <value>\n
@@ -518,7 +537,7 @@ int resource_manager_get_stats(resource_manager_t *rm,
             char cpuacct_path[BUF_SIZE];
             if (find_cpuacct_usage_path(rm, container_id, cpuacct_path, sizeof(cpuacct_path)) == 0) {
                 DEBUG_LOG(rm, "Debug: Found cpuacct.usage at %s\n", cpuacct_path);
-                if (read_file(cpuacct_path, buffer, sizeof(buffer)) == 0) {
+                if (read_file(cpuacct_path, buffer, sizeof(buffer), rm) == 0) {
                     DEBUG_LOG(rm, "Debug: Read from cpuacct.usage: '%s'\n", buffer);
                     char *endptr;
                     unsigned long val = strtoul(buffer, &endptr, 10);
@@ -550,7 +569,7 @@ int resource_manager_get_stats(resource_manager_t *rm,
             // cgroup2: read from memory.current
             snprintf(path, sizeof(path), "%s/%s_%s/memory.current", CGROUP_ROOT, rm->cgroup_path, container_id);
             DEBUG_LOG(rm, "Debug: Attempting to read memory.current from %s\n", path);
-            if (read_file(path, buffer, sizeof(buffer)) == 0) {
+            if (read_file(path, buffer, sizeof(buffer), rm) == 0) {
                 DEBUG_LOG(rm, "Debug: Successfully read memory.current, content: '%s'\n", buffer);
                 char *endptr;
                 unsigned long val = strtoul(buffer, &endptr, 10);
@@ -567,7 +586,7 @@ int resource_manager_get_stats(resource_manager_t *rm,
             // cgroup v1: read from memory.usage_in_bytes
             snprintf(path, sizeof(path), "%s/%s_%s/memory.usage_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
             DEBUG_LOG(rm, "Debug: Reading memory from %s (exists: %s)\n", path, access(path, F_OK) == 0 ? "yes" : "no");
-            if (read_file(path, buffer, sizeof(buffer)) == 0) {
+            if (read_file(path, buffer, sizeof(buffer), rm) == 0) {
                 DEBUG_LOG(rm, "Debug: Read from memory.usage_in_bytes: '%s'\n", buffer);
                 char *endptr;
                 unsigned long val = strtoul(buffer, &endptr, 10);
