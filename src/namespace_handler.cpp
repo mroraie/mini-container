@@ -20,6 +20,8 @@ typedef struct {
     namespace_config_t *config;
     char **command;
     int argc;
+    void (*add_to_cgroup_callback)(pid_t pid, void *user_data);
+    void *cgroup_user_data;
 } clone_args_t;
 
 void namespace_config_init(namespace_config_t *config) {
@@ -92,6 +94,13 @@ static int setup_container_filesystem(const namespace_config_t *config) {
 
 static int container_child(void *arg) {
     clone_args_t *args = static_cast<clone_args_t*>(arg);
+    
+    // Add this process to cgroup BEFORE execvp
+    // This ensures the process is in the cgroup from the start
+    if (args->add_to_cgroup_callback) {
+        pid_t my_pid = getpid();
+        args->add_to_cgroup_callback(my_pid, args->cgroup_user_data);
+    }
 
     if (namespace_setup_isolation(args->config) != 0) {
         fprintf(stderr, "Failed to setup namespace isolation\n");
@@ -132,6 +141,13 @@ int namespace_setup_isolation(const namespace_config_t *config) {
 
 pid_t namespace_create_container(const namespace_config_t *config,
                                char **command, int argc) {
+    return namespace_create_container_with_cgroup(config, command, argc, nullptr, nullptr);
+}
+
+pid_t namespace_create_container_with_cgroup(const namespace_config_t *config,
+                                            char **command, int argc,
+                                            void (*add_to_cgroup_callback)(pid_t pid, void *user_data),
+                                            void *cgroup_user_data) {
     if (!config || !command || argc <= 0) {
         fprintf(stderr, "Error: invalid parameters\n");
         return -1;
@@ -146,7 +162,9 @@ pid_t namespace_create_container(const namespace_config_t *config,
     clone_args_t args = {
         .config = const_cast<namespace_config_t*>(config),
         .command = command,
-        .argc = argc
+        .argc = argc,
+        .add_to_cgroup_callback = add_to_cgroup_callback,
+        .cgroup_user_data = cgroup_user_data
     };
 
     int flags = config->flags;

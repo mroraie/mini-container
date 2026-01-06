@@ -318,9 +318,28 @@ int container_manager_run(container_manager_t *cm, container_config_t *config) {
         return -1;
     }
 
-    pid_t pid = namespace_create_container(&config->ns_config,
-                                         config->command,
-                                         config->command_argc);
+    // Create a callback structure to pass to namespace_create_container
+    struct cgroup_callback_data {
+        resource_manager_t *rm;
+        const char *container_id;
+    };
+    
+    cgroup_callback_data callback_data = {
+        .rm = cm->rm,
+        .container_id = config->id
+    };
+    
+    // Callback function to add process to cgroup (called from child process)
+    auto add_to_cgroup = [](pid_t pid, void *user_data) -> void {
+        cgroup_callback_data *data = static_cast<cgroup_callback_data*>(user_data);
+        resource_manager_add_process(data->rm, data->container_id, pid);
+    };
+
+    pid_t pid = namespace_create_container_with_cgroup(&config->ns_config,
+                                                      config->command,
+                                                      config->command_argc,
+                                                      add_to_cgroup,
+                                                      &callback_data);
 
     if (pid == -1) {
         container_manager_destroy(cm, config->id);
@@ -334,7 +353,8 @@ int container_manager_run(container_manager_t *cm, container_config_t *config) {
         info->started_at = time(nullptr);
     }
 
-    resource_manager_add_process(cm->rm, config->id, pid);
+    // Note: PID is now added to cgroup from within the child process (before execvp)
+    // This ensures the process is in the cgroup from the start
 
     return 0;
 }
