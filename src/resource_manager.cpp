@@ -16,9 +16,48 @@ using namespace std;
 #define CGROUP_V2_CONTROLLERS CGROUP_ROOT "/cgroup.controllers"
 
 #define CPU_CGROUP_PATH CGROUP_ROOT "/cpu"
+#define CPUACCT_CGROUP_PATH CGROUP_ROOT "/cpuacct"
+#define CPU_CPUACCT_CGROUP_PATH CGROUP_ROOT "/cpu,cpuacct"
 #define MEMORY_CGROUP_PATH CGROUP_ROOT "/memory"
 
 #define BUF_SIZE 256
+
+// Helper function to find the correct CPU cgroup path for v1
+static const char* get_cpu_cgroup_path_v1(resource_manager_t *rm, const char *container_id) {
+    static char path[BUF_SIZE];
+    
+    // Try cpu,cpuacct first (most common)
+    snprintf(path, sizeof(path), "%s/%s_%s", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
+    if (access(path, F_OK) == 0) {
+        return CPU_CPUACCT_CGROUP_PATH;
+    }
+    
+    // Fallback to separate cpu path
+    return CPU_CGROUP_PATH;
+}
+
+// Helper function to find the correct cpuacct.usage file path for v1
+static int find_cpuacct_usage_path(resource_manager_t *rm, const char *container_id, char *path, size_t path_size) {
+    // Try cpu,cpuacct first (most common)
+    snprintf(path, path_size, "%s/%s_%s/cpuacct.usage", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
+    if (access(path, R_OK) == 0) {
+        return 0;
+    }
+    
+    // Try separate cpuacct
+    snprintf(path, path_size, "%s/%s_%s/cpuacct.usage", CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
+    if (access(path, R_OK) == 0) {
+        return 0;
+    }
+    
+    // Try cpu path (some systems have cpuacct.usage in cpu directory)
+    snprintf(path, path_size, "%s/%s_%s/cpuacct.usage", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+    if (access(path, R_OK) == 0) {
+        return 0;
+    }
+    
+    return -1;
+}
 
 static cgroup_version_t detect_cgroup_version() {
     // Check for cgroup2 first (unified hierarchy)
@@ -104,8 +143,16 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
         }
     } else {
         // cgroup v1
+        // Determine the correct CPU cgroup path
+        char cpu_path[BUF_SIZE];
+        snprintf(cpu_path, sizeof(cpu_path), "%s/%s_%s", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
+        if (access(cpu_path, F_OK) != 0) {
+            // Fallback to separate cpu path
+            snprintf(cpu_path, sizeof(cpu_path), "%s/%s_%s", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+        }
+        
         if (limits->shares > 0) {
-            snprintf(path, sizeof(path), "%s/%s_%s/cpu.shares", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+            snprintf(path, sizeof(path), "%s/cpu.shares", cpu_path);
             snprintf(value, sizeof(value), "%d", limits->shares);
             if (write_file(path, value) != 0) {
                 return -1;
@@ -113,13 +160,13 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
         }
 
         if (limits->quota_us > 0) {
-            snprintf(path, sizeof(path), "%s/%s_%s/cpu.cfs_quota_us", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+            snprintf(path, sizeof(path), "%s/cpu.cfs_quota_us", cpu_path);
             snprintf(value, sizeof(value), "%d", limits->quota_us);
             if (write_file(path, value) != 0) {
                 return -1;
             }
 
-            snprintf(path, sizeof(path), "%s/%s_%s/cpu.cfs_period_us", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+            snprintf(path, sizeof(path), "%s/cpu.cfs_period_us", cpu_path);
             snprintf(value, sizeof(value), "%d", limits->period_us > 0 ? limits->period_us : 100000);
             if (write_file(path, value) != 0) {
                 return -1;
@@ -252,10 +299,20 @@ int resource_manager_create_cgroup(resource_manager_t *rm,
         }
     } else {
         // cgroup v1: create separate directories for CPU and memory
-        snprintf(path, sizeof(path), "%s/%s_%s", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+        // Try cpu,cpuacct first (most common)
+        snprintf(path, sizeof(path), "%s/%s_%s", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
         if (mkdir(path, 0755) == -1 && errno != EEXIST) {
-            perror("mkdir CPU cgroup failed");
-            return -1;
+            // Fallback to separate cpu and cpuacct
+            snprintf(path, sizeof(path), "%s/%s_%s", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+            if (mkdir(path, 0755) == -1 && errno != EEXIST) {
+                perror("mkdir CPU cgroup failed");
+                return -1;
+            }
+
+            snprintf(path, sizeof(path), "%s/%s_%s", CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
+            if (mkdir(path, 0755) == -1 && errno != EEXIST) {
+                // cpuacct might not exist separately, continue
+            }
         }
 
         snprintf(path, sizeof(path), "%s/%s_%s", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
@@ -300,9 +357,19 @@ int resource_manager_add_process(resource_manager_t *rm,
         }
     } else {
         // cgroup v1 uses tasks
-        snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+        // Try cpu,cpuacct first (most common)
+        snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
         if (write_file(path, pid_str) != 0) {
-            return -1;
+            // Fallback to separate cpu and cpuacct
+            snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+            if (write_file(path, pid_str) != 0) {
+                return -1;
+            }
+            
+            snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
+            if (write_file(path, pid_str) != 0) {
+                // cpuacct might not exist separately, continue
+            }
         }
 
         snprintf(path, sizeof(path), "%s/%s_%s/tasks", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
@@ -335,7 +402,15 @@ int resource_manager_destroy_cgroup(resource_manager_t *rm,
         snprintf(path, sizeof(path), "%s/%s_%s", CGROUP_ROOT, rm->cgroup_path, container_id);
         rmdir(path);
     } else {
+        // Try cpu,cpuacct first
+        snprintf(path, sizeof(path), "%s/%s_%s", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
+        rmdir(path);
+        
+        // Also try separate paths
         snprintf(path, sizeof(path), "%s/%s_%s", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
+        rmdir(path);
+
+        snprintf(path, sizeof(path), "%s/%s_%s", CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
         rmdir(path);
 
         snprintf(path, sizeof(path), "%s/%s_%s", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
@@ -362,13 +437,18 @@ int resource_manager_get_stats(resource_manager_t *rm,
             snprintf(path, sizeof(path), "%s/%s_%s/cpu.stat", CGROUP_ROOT, rm->cgroup_path, container_id);
             if (read_file(path, buffer, sizeof(buffer)) == 0) {
                 // Parse usage_usec from cpu.stat
+                // Format: usage_usec <value>\n
                 char *usage_line = strstr(buffer, "usage_usec");
                 if (usage_line) {
                     // Skip "usage_usec" and whitespace
                     char *value_start = usage_line;
-                    while (*value_start && *value_start != ' ') value_start++;
-                    while (*value_start && *value_start == ' ') value_start++;
-                    *cpu_usage = strtoul(value_start, nullptr, 10) * 1000; // Convert microseconds to nanoseconds
+                    while (*value_start && *value_start != ' ' && *value_start != '\t') value_start++;
+                    while (*value_start && (*value_start == ' ' || *value_start == '\t')) value_start++;
+                    if (*value_start) {
+                        *cpu_usage = strtoul(value_start, nullptr, 10) * 1000; // Convert microseconds to nanoseconds
+                    } else {
+                        *cpu_usage = 0;
+                    }
                 } else {
                     *cpu_usage = 0;
                 }
@@ -377,9 +457,13 @@ int resource_manager_get_stats(resource_manager_t *rm,
             }
         } else {
             // cgroup v1: read from cpuacct.usage
-            snprintf(path, sizeof(path), "%s/%s_%s/cpuacct.usage", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-            if (read_file(path, buffer, sizeof(buffer)) == 0) {
-                *cpu_usage = strtoul(buffer, nullptr, 10);
+            char cpuacct_path[BUF_SIZE];
+            if (find_cpuacct_usage_path(rm, container_id, cpuacct_path, sizeof(cpuacct_path)) == 0) {
+                if (read_file(cpuacct_path, buffer, sizeof(buffer)) == 0) {
+                    *cpu_usage = strtoul(buffer, nullptr, 10);
+                } else {
+                    *cpu_usage = 0;
+                }
             } else {
                 *cpu_usage = 0;
             }

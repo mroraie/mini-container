@@ -108,6 +108,11 @@ std::string WebServer::handleRequest(const std::string& request) {
                       "Content-Type: text/html\r\n"
                       "Connection: close\r\n\r\n" +
                       generateHTML();
+        } else if (path == "/monitor" || path == "/monitor.html") {
+            response = "HTTP/1.1 200 OK\r\n"
+                      "Content-Type: text/html\r\n"
+                      "Connection: close\r\n\r\n" +
+                      generateMonitorHTML();
         } else if (path == "/api/containers") {
             response = "HTTP/1.1 200 OK\r\n"
                       "Content-Type: application/json\r\n"
@@ -226,6 +231,358 @@ std::string WebServer::handleRequest(const std::string& request) {
     return response;
 }
 
+std::string WebServer::generateMonitorHTML() {
+    return R"HTML(
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مانیتور کانتینرها</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000000;
+            color: #00ff00;
+            direction: rtl;
+            padding: 10px;
+            font-size: 12px;
+        }
+
+        .header {
+            border-bottom: 1px solid #00ff00;
+            padding: 10px 0;
+            margin-bottom: 10px;
+        }
+
+        .header h1 {
+            font-size: 16px;
+            font-weight: normal;
+            color: #00ff00;
+        }
+
+        .stats-bar {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 10px;
+            padding: 5px 0;
+            border-bottom: 1px solid #333333;
+        }
+
+        .stat-item {
+            display: flex;
+            gap: 5px;
+        }
+
+        .stat-label {
+            color: #888888;
+        }
+
+        .stat-value {
+            color: #00ff00;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table thead {
+            border-bottom: 1px solid #00ff00;
+        }
+
+        .table th {
+            text-align: right;
+            padding: 5px 10px;
+            font-weight: normal;
+            color: #00ff00;
+            border-bottom: 1px solid #333333;
+        }
+
+        .table td {
+            padding: 3px 10px;
+            border-bottom: 1px solid #222222;
+        }
+
+        .table tr:hover {
+            background: #111111;
+        }
+
+        .status-running {
+            color: #00ff00;
+        }
+
+        .status-stopped {
+            color: #ff0000;
+        }
+
+        .status-created {
+            color: #ffff00;
+        }
+
+        .cpu-bar {
+            display: inline-block;
+            width: 60px;
+            height: 10px;
+            background: #222222;
+            border: 1px solid #00ff00;
+            position: relative;
+            vertical-align: middle;
+        }
+
+        .cpu-bar-fill {
+            height: 100%;
+            background: #00ff00;
+            transition: width 0.3s;
+        }
+
+        .memory-bar {
+            display: inline-block;
+            width: 60px;
+            height: 10px;
+            background: #222222;
+            border: 1px solid #00ff00;
+            position: relative;
+            vertical-align: middle;
+        }
+
+        .memory-bar-fill {
+            height: 100%;
+            background: #00ff00;
+            transition: width 0.3s;
+        }
+
+        .footer {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #333333;
+            color: #888888;
+            font-size: 10px;
+            text-align: center;
+        }
+
+        .no-containers {
+            text-align: center;
+            padding: 20px;
+            color: #888888;
+        }
+
+        .link {
+            color: #00ff00;
+            text-decoration: none;
+            margin-left: 10px;
+        }
+
+        .link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>مانیتور کانتینرها - Mini Container Monitor</h1>
+        <a href="/" class="link">بازگشت به صفحه اصلی</a>
+    </div>
+
+    <div class="stats-bar">
+        <div class="stat-item">
+            <span class="stat-label">کانتینرهای فعال:</span>
+            <span class="stat-value" id="running-count">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">کل کانتینرها:</span>
+            <span class="stat-value" id="total-count">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">به‌روزرسانی:</span>
+            <span class="stat-value" id="update-time">--:--:--</span>
+        </div>
+    </div>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th style="width: 20%;">ID</th>
+                <th style="width: 10%;">PID</th>
+                <th style="width: 10%;">وضعیت</th>
+                <th style="width: 15%;">CPU</th>
+                <th style="width: 15%;">حافظه</th>
+                <th style="width: 15%;">زمان اجرا</th>
+                <th style="width: 15%;">زمان ایجاد</th>
+            </tr>
+        </thead>
+        <tbody id="container-table-body">
+            <tr>
+                <td colspan="7" class="no-containers">در حال بارگذاری...</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="footer">
+        فشردن F5 برای به‌روزرسانی | به‌روزرسانی خودکار هر 1 ثانیه
+    </div>
+
+    <script>
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function formatTime(seconds) {
+            if (!seconds) return '--';
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            if (hours > 0) {
+                return hours + ':' + String(minutes).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+            }
+            return minutes + ':' + String(secs).padStart(2, '0');
+        }
+
+        function formatDate(timestamp) {
+            if (!timestamp) return '--';
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleTimeString('fa-IR');
+        }
+
+        function calculateCPUPercent(cpuUsageNs, startTime) {
+            if (!cpuUsageNs || !startTime) return 0;
+            const now = Math.floor(Date.now() / 1000);
+            const elapsed = now - startTime;
+            if (elapsed <= 0) return 0;
+            // CPU usage in nanoseconds, convert to percentage
+            // Assuming 1 CPU core, 1 second = 1e9 nanoseconds
+            const cpuPercent = (cpuUsageNs / 1e9 / elapsed) * 100;
+            return Math.min(100, Math.max(0, cpuPercent));
+        }
+
+        function updateMonitor() {
+            fetch('/api/containers')
+                .then(response => response.json())
+                .then(data => {
+                    const tbody = document.getElementById('container-table-body');
+                    const runningCount = document.getElementById('running-count');
+                    const totalCount = document.getElementById('total-count');
+                    const updateTime = document.getElementById('update-time');
+
+                    // Update stats
+                    const running = data.containers ? data.containers.filter(c => c.state === 'RUNNING').length : 0;
+                    const total = data.containers ? data.containers.length : 0;
+                    runningCount.textContent = running;
+                    totalCount.textContent = total;
+
+                    // Update time
+                    const now = new Date();
+                    updateTime.textContent = now.toLocaleTimeString('fa-IR');
+
+                    // Clear table
+                    tbody.innerHTML = '';
+
+                    if (!data.containers || data.containers.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7" class="no-containers">هیچ کانتینری یافت نشد</td></tr>';
+                        return;
+                    }
+
+                    // Sort: running first, then by start time
+                    const sorted = [...data.containers].sort((a, b) => {
+                        if (a.state === 'RUNNING' && b.state !== 'RUNNING') return -1;
+                        if (a.state !== 'RUNNING' && b.state === 'RUNNING') return 1;
+                        return (b.started_at || 0) - (a.started_at || 0);
+                    });
+
+                    sorted.forEach(container => {
+                        const row = document.createElement('tr');
+                        
+                        const statusClass = 'status-' + container.state.toLowerCase();
+                        const statusText = {
+                            'created': 'ایجاد شده',
+                            'running': 'در حال اجرا',
+                            'stopped': 'متوقف شده',
+                            'destroyed': 'نابود شده'
+                        }[container.state.toLowerCase()] || container.state;
+
+                        let cpuDisplay = '--';
+                        let cpuPercent = 0;
+                        if (container.state === 'RUNNING' && container.cpu_usage !== undefined) {
+                            cpuPercent = calculateCPUPercent(container.cpu_usage, container.started_at);
+                            cpuDisplay = cpuPercent.toFixed(1) + '%';
+                        }
+
+                        let memoryDisplay = '--';
+                        let memoryPercent = 0;
+                        if (container.state === 'RUNNING' && container.memory_usage !== undefined) {
+                            memoryDisplay = formatBytes(container.memory_usage);
+                            // Assuming 128MB default limit for percentage calculation
+                            const limit = 128 * 1024 * 1024;
+                            memoryPercent = (container.memory_usage / limit) * 100;
+                            memoryPercent = Math.min(100, Math.max(0, memoryPercent));
+                        }
+
+                        const runtime = container.started_at ? 
+                            Math.floor(Date.now() / 1000) - container.started_at : 0;
+
+                        row.innerHTML = `
+                            <td>${container.id}</td>
+                            <td>${container.pid || '--'}</td>
+                            <td class="${statusClass}">${statusText}</td>
+                            <td>
+                                ${container.state === 'RUNNING' ? `
+                                    <div class="cpu-bar">
+                                        <div class="cpu-bar-fill" style="width: ${cpuPercent}%"></div>
+                                    </div>
+                                    ${cpuDisplay}
+                                ` : '--'}
+                            </td>
+                            <td>
+                                ${container.state === 'RUNNING' ? `
+                                    <div class="memory-bar">
+                                        <div class="memory-bar-fill" style="width: ${memoryPercent}%"></div>
+                                    </div>
+                                    ${memoryDisplay}
+                                ` : '--'}
+                            </td>
+                            <td>${formatTime(runtime)}</td>
+                            <td>${formatDate(container.created_at)}</td>
+                        `;
+
+                        tbody.appendChild(row);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('container-table-body').innerHTML = 
+                        '<tr><td colspan="7" class="no-containers" style="color: #ff0000;">خطا در بارگذاری داده‌ها</td></tr>';
+                });
+        }
+
+        // Initial load
+        updateMonitor();
+
+        // Auto refresh every 1 second
+        setInterval(updateMonitor, 1000);
+
+        // Also refresh on F5
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'F5') {
+                e.preventDefault();
+                updateMonitor();
+            }
+        });
+    </script>
+</body>
+</html>
+)HTML";
+}
+
 std::string WebServer::generateHTML() {
     return R"HTML(
 <!DOCTYPE html>
@@ -242,48 +599,53 @@ std::string WebServer::generateHTML() {
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #333;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #ffffff;
+            color: #000000;
             direction: rtl;
             min-height: 100vh;
+            margin: 0;
+            padding: 0;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 800px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 40px 20px;
         }
 
         .header {
             text-align: center;
-            margin-bottom: 30px;
-            color: white;
+            margin-bottom: 40px;
+            color: #000000;
         }
 
         .header h1 {
-            font-size: 2.5em;
+            font-size: 2em;
             margin-bottom: 10px;
+            font-weight: 400;
         }
 
         .header p {
-            font-size: 1.2em;
-            opacity: 0.9;
+            font-size: 1em;
+            color: #666666;
+            font-weight: 300;
         }
 
         .card {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            padding: 30px;
+            margin-bottom: 30px;
         }
 
         .card h2 {
-            color: #667eea;
-            margin-bottom: 15px;
-            border-bottom: 2px solid #667eea;
+            color: #000000;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #e0e0e0;
             padding-bottom: 10px;
+            font-weight: 400;
+            font-size: 1.3em;
         }
 
         .form-group {
@@ -292,71 +654,68 @@ std::string WebServer::generateHTML() {
 
         .form-group label {
             display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #555;
+            margin-bottom: 8px;
+            font-weight: 400;
+            color: #000000;
+            font-size: 0.9em;
         }
 
         .form-group input, .form-group select {
             width: 100%;
             padding: 10px;
-            border: 2px solid #ddd;
-            border-radius: 5px;
-            font-size: 16px;
-            transition: border-color 0.3s;
+            border: 1px solid #e0e0e0;
+            font-size: 14px;
+            background: #ffffff;
+            color: #000000;
         }
 
         .form-group input:focus, .form-group select:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #000000;
         }
 
         .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #000000;
+            color: #ffffff;
             padding: 12px 24px;
-            border: none;
-            border-radius: 5px;
+            border: 1px solid #000000;
             cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-            transition: transform 0.2s;
+            font-size: 14px;
+            font-weight: 400;
             width: 100%;
         }
 
         .btn:hover {
-            transform: translateY(-2px);
+            background: #333333;
         }
 
         .btn:disabled {
-            background: #ccc;
+            background: #cccccc;
+            border-color: #cccccc;
             cursor: not-allowed;
-            transform: none;
         }
 
         .status {
-            padding: 10px;
-            border-radius: 5px;
+            padding: 12px;
             margin-bottom: 15px;
-            font-weight: bold;
+            font-weight: 400;
+            border: 1px solid #e0e0e0;
+            background: #ffffff;
         }
 
         .status.success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+            color: #000000;
+            border-color: #000000;
         }
 
         .status.error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+            color: #000000;
+            border-color: #000000;
         }
 
         .status.info {
-            background-color: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
+            color: #666666;
+            border-color: #e0e0e0;
         }
 
         .container-list {
@@ -364,21 +723,18 @@ std::string WebServer::generateHTML() {
         }
 
         .container-item {
-            border: 1px solid #ddd;
-            border-radius: 5px;
+            border: 1px solid #e0e0e0;
             padding: 15px;
             margin-bottom: 10px;
-            background: #f9f9f9;
+            background: #ffffff;
         }
 
         .container-item.running {
-            border-color: #28a745;
-            background: #d4edda;
+            border-color: #000000;
         }
 
         .container-item.stopped {
-            border-color: #dc3545;
-            background: #f8d7da;
+            border-color: #e0e0e0;
         }
 
         .container-header {
@@ -389,30 +745,31 @@ std::string WebServer::generateHTML() {
         }
 
         .container-id {
-            font-weight: bold;
-            font-size: 18px;
+            font-weight: 400;
+            font-size: 16px;
         }
 
         .container-status {
             padding: 4px 8px;
-            border-radius: 3px;
             font-size: 12px;
-            font-weight: bold;
+            font-weight: 400;
+            border: 1px solid #000000;
+            background: #ffffff;
+            color: #000000;
         }
 
         .container-status.running {
-            background: #28a745;
-            color: white;
+            border-color: #000000;
         }
 
         .container-status.stopped {
-            background: #dc3545;
-            color: white;
+            border-color: #e0e0e0;
+            color: #666666;
         }
 
         .container-status.created {
-            background: #ffc107;
-            color: black;
+            border-color: #e0e0e0;
+            color: #666666;
         }
 
         .container-details {
@@ -423,48 +780,48 @@ std::string WebServer::generateHTML() {
         }
 
         .concept-explanation {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            padding: 20px;
+            margin-bottom: 30px;
         }
 
         .concept-title {
-            font-weight: bold;
-            color: #667eea;
-            margin-bottom: 5px;
+            font-weight: 400;
+            color: #000000;
+            margin-bottom: 10px;
+            font-size: 0.9em;
         }
 
         .concept-desc {
-            color: #666;
-            font-size: 14px;
+            color: #666666;
+            font-size: 13px;
+            line-height: 1.6;
         }
 
         .progress-bar {
             width: 100%;
-            height: 20px;
-            background-color: #f0f0f0;
-            border-radius: 10px;
+            height: 2px;
+            background-color: #e0e0e0;
             overflow: hidden;
             margin: 10px 0;
         }
 
         .progress-fill {
             height: 100%;
-            background: linear-gradient(90deg, #28a745, #20c997);
+            background: #000000;
             transition: width 0.3s ease;
         }
 
         .execution-log {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 5px;
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
             padding: 15px;
             margin-top: 15px;
             max-height: 300px;
             overflow-y: auto;
             font-family: 'Courier New', monospace;
-            font-size: 13px;
+            font-size: 12px;
         }
 
         .log-entry {
@@ -477,43 +834,8 @@ std::string WebServer::generateHTML() {
         }
 
         .log-time {
-            color: #6c757d;
+            color: #999999;
             margin-left: 10px;
-        }
-
-        .test-section {
-            margin-top: 20px;
-        }
-
-        .test-results {
-            margin-top: 15px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 5px;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .test-step {
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            border-right: 4px solid #667eea;
-        }
-
-        .test-step.success {
-            background: #d4edda;
-            border-right-color: #28a745;
-        }
-
-        .test-step.error {
-            background: #f8d7da;
-            border-right-color: #dc3545;
-        }
-
-        .test-step.info {
-            background: #d1ecf1;
-            border-right-color: #17a2b8;
         }
 
         @media (max-width: 768px) {
@@ -536,6 +858,9 @@ std::string WebServer::generateHTML() {
         <div class="header">
             <h1>مینی کانتینر</h1>
             <p>سیستم کانتینر ساده برای نمایش مفاهیم سیستم‌عامل</p>
+            <p style="margin-top: 10px;">
+                <a href="/monitor" style="color: #000000; text-decoration: underline;">📊 مشاهده مانیتور (htop-like)</a>
+            </p>
         </div>
 
         <div class="concept-explanation">
@@ -583,7 +908,7 @@ std::string WebServer::generateHTML() {
             </form>
             
             <div id="execution-log" class="execution-log" style="display: none;">
-                <div style="font-weight: bold; margin-bottom: 10px; color: #667eea;">روند اجرا:</div>
+                <div style="font-weight: 400; margin-bottom: 10px; color: #000000;">روند اجرا:</div>
                 <div id="log-entries"></div>
             </div>
         </div>

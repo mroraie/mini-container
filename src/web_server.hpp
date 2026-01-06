@@ -39,6 +39,7 @@ private:
     void serverThread();
     std::string handleRequest(const std::string& request);
     std::string generateHTML();
+    std::string generateMonitorHTML();
     std::string getContainerListJSON();
     std::string getContainerInfoJSON(const std::string& id);
 
