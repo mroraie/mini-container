@@ -454,14 +454,43 @@ std::string WebServer::generateMonitorHTML() {
             return date.toLocaleTimeString('fa-IR');
         }
 
-        function calculateCPUPercent(cpuUsageNs, startTime) {
-            if (!cpuUsageNs || !startTime) return 0;
-            const now = Math.floor(Date.now() / 1000);
-            const elapsed = now - startTime;
-            if (elapsed <= 0) return 0;
+        // Store previous CPU usage for each container
+        const prevCpuUsage = {};
+        const prevUpdateTime = {};
+
+        function calculateCPUPercent(containerId, cpuUsageNs, currentTime) {
+            if (!cpuUsageNs || cpuUsageNs === 0) return 0;
+            
+            const prev = prevCpuUsage[containerId];
+            const prevTime = prevUpdateTime[containerId];
+            
+            if (!prev || !prevTime) {
+                // First measurement, store and return 0
+                prevCpuUsage[containerId] = cpuUsageNs;
+                prevUpdateTime[containerId] = currentTime;
+                return 0;
+            }
+            
+            const timeDiff = currentTime - prevTime;
+            if (timeDiff <= 0) return 0;
+            
+            const cpuDiff = cpuUsageNs - prev;
+            if (cpuDiff < 0) {
+                // CPU counter might have reset, just store current
+                prevCpuUsage[containerId] = cpuUsageNs;
+                prevUpdateTime[containerId] = currentTime;
+                return 0;
+            }
+            
             // CPU usage in nanoseconds, convert to percentage
             // Assuming 1 CPU core, 1 second = 1e9 nanoseconds
-            const cpuPercent = (cpuUsageNs / 1e9 / elapsed) * 100;
+            // Percentage = (cpu_time_used / wall_clock_time) * 100
+            const cpuPercent = (cpuDiff / 1e9 / timeDiff) * 100;
+            
+            // Update stored values
+            prevCpuUsage[containerId] = cpuUsageNs;
+            prevUpdateTime[containerId] = currentTime;
+            
             return Math.min(100, Math.max(0, cpuPercent));
         }
 
@@ -512,19 +541,32 @@ std::string WebServer::generateMonitorHTML() {
 
                         let cpuDisplay = '--';
                         let cpuPercent = 0;
-                        if (container.state === 'RUNNING' && container.cpu_usage !== undefined) {
-                            cpuPercent = calculateCPUPercent(container.cpu_usage, container.started_at);
-                            cpuDisplay = cpuPercent.toFixed(1) + '%';
+                        const currentTime = Date.now();
+                        if (container.state === 'RUNNING') {
+                            // Check if cpu_usage exists and is a valid number
+                            const cpuUsage = container.cpu_usage;
+                            if (cpuUsage !== undefined && cpuUsage !== null && typeof cpuUsage === 'number' && cpuUsage >= 0) {
+                                cpuPercent = calculateCPUPercent(container.id, cpuUsage, currentTime);
+                                cpuDisplay = cpuPercent.toFixed(1) + '%';
+                            } else {
+                                cpuDisplay = '0.0%';
+                            }
                         }
 
                         let memoryDisplay = '--';
                         let memoryPercent = 0;
-                        if (container.state === 'RUNNING' && container.memory_usage !== undefined) {
-                            memoryDisplay = formatBytes(container.memory_usage);
-                            // Assuming 128MB default limit for percentage calculation
-                            const limit = 128 * 1024 * 1024;
-                            memoryPercent = (container.memory_usage / limit) * 100;
-                            memoryPercent = Math.min(100, Math.max(0, memoryPercent));
+                        if (container.state === 'RUNNING') {
+                            // Check if memory_usage exists and is a valid number
+                            const memoryUsage = container.memory_usage;
+                            if (memoryUsage !== undefined && memoryUsage !== null && typeof memoryUsage === 'number' && memoryUsage >= 0) {
+                                memoryDisplay = formatBytes(memoryUsage);
+                                // Assuming 128MB default limit for percentage calculation
+                                const limit = 128 * 1024 * 1024;
+                                memoryPercent = (memoryUsage / limit) * 100;
+                                memoryPercent = Math.min(100, Math.max(0, memoryPercent));
+                            } else {
+                                memoryDisplay = '0 B';
+                            }
                         }
 
                         const runtime = container.started_at ? 

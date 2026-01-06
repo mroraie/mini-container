@@ -92,13 +92,21 @@ static int write_file(const char *path, const char *value) {
 static int read_file(const char *path, char *buffer, size_t size) {
     int fd = open(path, O_RDONLY);
     if (fd == -1) {
-        perror("open cgroup file failed");
+        // Don't print error for missing files (they might not exist yet)
+        if (errno != ENOENT) {
+            fprintf(stderr, "Warning: failed to open cgroup file %s: %s\n", path, strerror(errno));
+        }
         return -1;
     }
 
     ssize_t read_bytes = read(fd, buffer, size - 1);
     if (read_bytes == -1) {
-        perror("read from cgroup file failed");
+        fprintf(stderr, "Warning: failed to read from cgroup file %s: %s\n", path, strerror(errno));
+        close(fd);
+        return -1;
+    }
+
+    if (read_bytes == 0) {
         close(fd);
         return -1;
     }
@@ -353,28 +361,41 @@ int resource_manager_add_process(resource_manager_t *rm,
         // cgroup2 uses cgroup.procs
         snprintf(path, sizeof(path), "%s/%s_%s/cgroup.procs", CGROUP_ROOT, rm->cgroup_path, container_id);
         if (write_file(path, pid_str) != 0) {
+            fprintf(stderr, "Warning: failed to add process %d to cgroup v2: %s\n", pid, path);
             return -1;
         }
     } else {
         // cgroup v1 uses tasks
+        int added = 0;
+        
         // Try cpu,cpuacct first (most common)
         snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
-        if (write_file(path, pid_str) != 0) {
+        if (write_file(path, pid_str) == 0) {
+            added = 1;
+        } else {
             // Fallback to separate cpu and cpuacct
             snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-            if (write_file(path, pid_str) != 0) {
-                return -1;
+            if (write_file(path, pid_str) == 0) {
+                added = 1;
+            } else {
+                fprintf(stderr, "Warning: failed to add process %d to CPU cgroup: %s\n", pid, path);
             }
             
             snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
-            if (write_file(path, pid_str) != 0) {
-                // cpuacct might not exist separately, continue
+            if (write_file(path, pid_str) == 0) {
+                added = 1;
             }
+            // cpuacct might not exist separately, continue
+        }
+
+        if (!added) {
+            fprintf(stderr, "Warning: failed to add process %d to any CPU cgroup\n", pid);
         }
 
         snprintf(path, sizeof(path), "%s/%s_%s/tasks", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
         if (write_file(path, pid_str) != 0) {
-            return -1;
+            fprintf(stderr, "Warning: failed to add process %d to memory cgroup: %s\n", pid, path);
+            // Don't fail completely if memory cgroup fails
         }
     }
 
@@ -460,7 +481,13 @@ int resource_manager_get_stats(resource_manager_t *rm,
             char cpuacct_path[BUF_SIZE];
             if (find_cpuacct_usage_path(rm, container_id, cpuacct_path, sizeof(cpuacct_path)) == 0) {
                 if (read_file(cpuacct_path, buffer, sizeof(buffer)) == 0) {
-                    *cpu_usage = strtoul(buffer, nullptr, 10);
+                    char *endptr;
+                    unsigned long val = strtoul(buffer, &endptr, 10);
+                    if (*endptr == '\0' || *endptr == '\n' || *endptr == ' ') {
+                        *cpu_usage = val;
+                    } else {
+                        *cpu_usage = 0;
+                    }
                 } else {
                     *cpu_usage = 0;
                 }
@@ -475,7 +502,13 @@ int resource_manager_get_stats(resource_manager_t *rm,
             // cgroup2: read from memory.current
             snprintf(path, sizeof(path), "%s/%s_%s/memory.current", CGROUP_ROOT, rm->cgroup_path, container_id);
             if (read_file(path, buffer, sizeof(buffer)) == 0) {
-                *memory_usage = strtoul(buffer, nullptr, 10);
+                char *endptr;
+                unsigned long val = strtoul(buffer, &endptr, 10);
+                if (*endptr == '\0' || *endptr == '\n' || *endptr == ' ') {
+                    *memory_usage = val;
+                } else {
+                    *memory_usage = 0;
+                }
             } else {
                 *memory_usage = 0;
             }
@@ -483,7 +516,13 @@ int resource_manager_get_stats(resource_manager_t *rm,
             // cgroup v1: read from memory.usage_in_bytes
             snprintf(path, sizeof(path), "%s/%s_%s/memory.usage_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
             if (read_file(path, buffer, sizeof(buffer)) == 0) {
-                *memory_usage = strtoul(buffer, nullptr, 10);
+                char *endptr;
+                unsigned long val = strtoul(buffer, &endptr, 10);
+                if (*endptr == '\0' || *endptr == '\n' || *endptr == ' ') {
+                    *memory_usage = val;
+                } else {
+                    *memory_usage = 0;
+                }
             } else {
                 *memory_usage = 0;
             }
