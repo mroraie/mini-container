@@ -122,16 +122,23 @@ echo "=========================================="
 
 # Test 1: CPU-intensive infinite loop
 echo -e "\n${YELLOW}Test 1: CPU-intensive infinite loop${NC}"
-CONTAINER_ID="test_cpu_$(date +%s)_$$"
+ROOT_PATH="/tmp/container_root_test_cpu_$(date +%s)_$$"
 echo "Running: /bin/sh -c 'while true; do :; done'"
 
-if $CONTAINER_BIN run --id "$CONTAINER_ID" \
-    --command "/bin/sh" \
-    --args "-c" "while true; do :; done" \
-    --memory 128 \
-    --cpu 1024 \
-    --hostname "test-cpu" \
-    --root-path "/tmp/container_root_$CONTAINER_ID" 2>&1; then
+# Run in background and capture output
+RUN_OUTPUT=$($CONTAINER_BIN run --memory 128 --cpu 1024 --hostname "test-cpu" --root "$ROOT_PATH" /bin/sh -c "while true; do :; done" 2>&1 &)
+sleep 2
+
+# Get container ID from list (first running container)
+CONTAINER_ID=$($CONTAINER_BIN list 2>/dev/null | grep "RUNNING" | head -1 | awk '{print $1}' || echo "")
+
+if [ -z "$CONTAINER_ID" ]; then
+    # Try to get from output
+    CONTAINER_ID=$(echo "$RUN_OUTPUT" | grep -oE "Container [^ ]+ started" | awk '{print $2}' || echo "")
+fi
+
+if [ -n "$CONTAINER_ID" ]; then
+    echo "Container ID: $CONTAINER_ID"
     
     if check_usage "$CONTAINER_ID" "CPU-intensive loop" 5; then
         echo -e "${GREEN}Test 1 PASSED${NC}"
@@ -147,16 +154,23 @@ cleanup "$CONTAINER_ID"
 
 # Test 2: CPU-intensive calculation
 echo -e "\n${YELLOW}Test 2: CPU-intensive calculation${NC}"
-CONTAINER_ID="test_cpu_calc_$(date +%s)_$$"
+ROOT_PATH="/tmp/container_root_test_cpu_calc_$(date +%s)_$$"
 echo "Running: /bin/sh -c 'i=0; while [ \$i -lt 100000000 ]; do i=\$((i+1)); done'"
 
-if $CONTAINER_BIN run --id "$CONTAINER_ID" \
-    --command "/bin/sh" \
-    --args "-c" "i=0; while [ \$i -lt 100000000 ]; do i=\$((i+1)); done; echo Done" \
-    --memory 128 \
-    --cpu 1024 \
-    --hostname "test-cpu-calc" \
-    --root-path "/tmp/container_root_$CONTAINER_ID" 2>&1; then
+# Run in background and capture output
+RUN_OUTPUT=$($CONTAINER_BIN run --memory 128 --cpu 1024 --hostname "test-cpu-calc" --root "$ROOT_PATH" /bin/sh -c "i=0; while [ \$i -lt 100000000 ]; do i=\$((i+1)); done; echo Done" 2>&1 &)
+sleep 2
+
+# Get container ID from list (first running container)
+CONTAINER_ID=$($CONTAINER_BIN list 2>/dev/null | grep "RUNNING" | head -1 | awk '{print $1}' || echo "")
+
+if [ -z "$CONTAINER_ID" ]; then
+    # Try to get from output
+    CONTAINER_ID=$(echo "$RUN_OUTPUT" | grep -oE "Container [^ ]+ started" | awk '{print $2}' || echo "")
+fi
+
+if [ -n "$CONTAINER_ID" ]; then
+    echo "Container ID: $CONTAINER_ID"
     
     if check_usage "$CONTAINER_ID" "CPU calculation" 2; then
         echo -e "${GREEN}Test 2 PASSED${NC}"
@@ -172,16 +186,23 @@ cleanup "$CONTAINER_ID"
 
 # Test 3: Memory-intensive
 echo -e "\n${YELLOW}Test 3: Memory-intensive command${NC}"
-CONTAINER_ID="test_mem_$(date +%s)_$$"
+ROOT_PATH="/tmp/container_root_test_mem_$(date +%s)_$$"
 echo "Running: dd if=/dev/zero of=/tmp/memtest bs=1M count=32"
 
-if $CONTAINER_BIN run --id "$CONTAINER_ID" \
-    --command "/bin/sh" \
-    --args "-c" "dd if=/dev/zero of=/tmp/memtest bs=1M count=32 && sleep 2 && rm -f /tmp/memtest" \
-    --memory 64 \
-    --cpu 1024 \
-    --hostname "test-mem" \
-    --root-path "/tmp/container_root_$CONTAINER_ID" 2>&1; then
+# Run in background and capture output
+RUN_OUTPUT=$($CONTAINER_BIN run --memory 64 --cpu 1024 --hostname "test-mem" --root "$ROOT_PATH" /bin/sh -c "dd if=/dev/zero of=/tmp/memtest bs=1M count=32 && sleep 2 && rm -f /tmp/memtest" 2>&1 &)
+sleep 2
+
+# Get container ID from list (first running container)
+CONTAINER_ID=$($CONTAINER_BIN list 2>/dev/null | grep "RUNNING" | head -1 | awk '{print $1}' || echo "")
+
+if [ -z "$CONTAINER_ID" ]; then
+    # Try to get from output
+    CONTAINER_ID=$(echo "$RUN_OUTPUT" | grep -oE "Container [^ ]+ started" | awk '{print $2}' || echo "")
+fi
+
+if [ -n "$CONTAINER_ID" ]; then
+    echo "Container ID: $CONTAINER_ID"
     
     if check_usage "$CONTAINER_ID" "Memory allocation" 3; then
         echo -e "${GREEN}Test 3 PASSED${NC}"
@@ -197,16 +218,23 @@ cleanup "$CONTAINER_ID"
 
 # Test 4: Combined CPU + Memory
 echo -e "\n${YELLOW}Test 4: Combined CPU + Memory intensive${NC}"
-CONTAINER_ID="test_combined_$(date +%s)_$$"
+ROOT_PATH="/tmp/container_root_test_combined_$(date +%s)_$$"
 echo "Running: CPU + Memory intensive command"
 
-if $CONTAINER_BIN run --id "$CONTAINER_ID" \
-    --command "/bin/sh" \
-    --args "-c" "dd if=/dev/zero of=/tmp/stress bs=1M count=16 && i=0; while [ \$i -lt 10000000 ]; do i=\$((i+1)); done; rm -f /tmp/stress" \
-    --memory 128 \
-    --cpu 1024 \
-    --hostname "test-combined" \
-    --root-path "/tmp/container_root_$CONTAINER_ID" 2>&1; then
+# Run in background and capture output
+RUN_OUTPUT=$($CONTAINER_BIN run --memory 128 --cpu 1024 --hostname "test-combined" --root "$ROOT_PATH" /bin/sh -c "dd if=/dev/zero of=/tmp/stress bs=1M count=16 && i=0; while [ \$i -lt 10000000 ]; do i=\$((i+1)); done; rm -f /tmp/stress" 2>&1 &)
+sleep 2
+
+# Get container ID from list (first running container)
+CONTAINER_ID=$($CONTAINER_BIN list 2>/dev/null | grep "RUNNING" | head -1 | awk '{print $1}' || echo "")
+
+if [ -z "$CONTAINER_ID" ]; then
+    # Try to get from output
+    CONTAINER_ID=$(echo "$RUN_OUTPUT" | grep -oE "Container [^ ]+ started" | awk '{print $2}' || echo "")
+fi
+
+if [ -n "$CONTAINER_ID" ]; then
+    echo "Container ID: $CONTAINER_ID"
     
     if check_usage "$CONTAINER_ID" "Combined CPU+Memory" 3; then
         echo -e "${GREEN}Test 4 PASSED${NC}"
