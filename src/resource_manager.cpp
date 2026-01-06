@@ -20,21 +20,7 @@ using namespace std;
 #define CPU_CPUACCT_CGROUP_PATH CGROUP_ROOT "/cpu,cpuacct"
 #define MEMORY_CGROUP_PATH CGROUP_ROOT "/memory"
 
-#define BUF_SIZE 256
-
-// Helper function to find the correct CPU cgroup path for v1
-static const char* get_cpu_cgroup_path_v1(resource_manager_t *rm, const char *container_id) {
-    static char path[BUF_SIZE];
-    
-    // Try cpu,cpuacct first (most common)
-    snprintf(path, sizeof(path), "%s/%s_%s", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
-    if (access(path, F_OK) == 0) {
-        return CPU_CPUACCT_CGROUP_PATH;
-    }
-    
-    // Fallback to separate cpu path
-    return CPU_CGROUP_PATH;
-}
+#define BUF_SIZE 512
 
 // Helper function to find the correct cpuacct.usage file path for v1
 static int find_cpuacct_usage_path(resource_manager_t *rm, const char *container_id, char *path, size_t path_size) {
@@ -160,7 +146,10 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
         }
         
         if (limits->shares > 0) {
-            snprintf(path, sizeof(path), "%s/cpu.shares", cpu_path);
+            int ret = snprintf(path, sizeof(path), "%s/cpu.shares", cpu_path);
+            if (ret < 0 || (size_t)ret >= sizeof(path)) {
+                return -1;
+            }
             snprintf(value, sizeof(value), "%d", limits->shares);
             if (write_file(path, value) != 0) {
                 return -1;
@@ -168,13 +157,19 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
         }
 
         if (limits->quota_us > 0) {
-            snprintf(path, sizeof(path), "%s/cpu.cfs_quota_us", cpu_path);
+            int ret = snprintf(path, sizeof(path), "%s/cpu.cfs_quota_us", cpu_path);
+            if (ret < 0 || (size_t)ret >= sizeof(path)) {
+                return -1;
+            }
             snprintf(value, sizeof(value), "%d", limits->quota_us);
             if (write_file(path, value) != 0) {
                 return -1;
             }
 
-            snprintf(path, sizeof(path), "%s/cpu.cfs_period_us", cpu_path);
+            ret = snprintf(path, sizeof(path), "%s/cpu.cfs_period_us", cpu_path);
+            if (ret < 0 || (size_t)ret >= sizeof(path)) {
+                return -1;
+            }
             snprintf(value, sizeof(value), "%d", limits->period_us > 0 ? limits->period_us : 100000);
             if (write_file(path, value) != 0) {
                 return -1;

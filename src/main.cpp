@@ -174,6 +174,8 @@ static int handle_stop(int argc, char *argv[])
 
 static int handle_list(int argc, char *argv[])
 {
+    (void)argc;  // Suppress unused parameter warning
+    (void)argv;  // Suppress unused parameter warning
     int count;
     container_info_t **containers = container_manager_list(&cm, &count);
 
