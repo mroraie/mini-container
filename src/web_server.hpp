@@ -58,6 +58,13 @@ private:
     // Execution tracking
     std::unordered_map<std::string, std::vector<std::string>> execution_logs_;
     std::mutex logs_mutex_;
-};
+    
+    // Debug logs
+    std::vector<std::string> debug_logs_;
+    std::mutex debug_logs_mutex_;
+    static const size_t MAX_DEBUG_LOGS = 1000;
+    
+    void addDebugLog(const std::string& message);
+    std::string getDebugLogsJSON();
 
 #endif // WEB_SERVER_HPP

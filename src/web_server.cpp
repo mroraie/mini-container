@@ -160,6 +160,20 @@ std::string WebServer::handleRequest(const std::string& request) {
                       "Access-Control-Allow-Origin: *\r\n"
                       "Connection: close\r\n\r\n"
                       "{\"message\":\"Tests should be run from the /tests page\"}";
+        } else if (path == "/api/debug-logs") {
+            response = "HTTP/1.1 200 OK\r\n"
+                      "Content-Type: application/json\r\n"
+                      "Access-Control-Allow-Origin: *\r\n"
+                      "Connection: close\r\n\r\n" +
+                      getDebugLogsJSON();
+        } else if (path == "/api/debug-logs/clear") {
+            std::lock_guard<std::mutex> lock(debug_logs_mutex_);
+            debug_logs_.clear();
+            response = "HTTP/1.1 200 OK\r\n"
+                      "Content-Type: application/json\r\n"
+                      "Access-Control-Allow-Origin: *\r\n"
+                      "Connection: close\r\n\r\n"
+                      "{\"success\":true}";
         } else {
             response = "HTTP/1.1 404 Not Found\r\n"
                       "Content-Type: text/plain\r\n"
@@ -474,6 +488,20 @@ std::string WebServer::generateMonitorHTML() {
         فشردن F5 برای به‌روزرسانی | به‌روزرسانی خودکار هر 1 ثانیه
     </div>
 
+    <div style="margin-top: 20px; border-top: 1px solid #333333; padding-top: 10px;">
+        <div style="margin-bottom: 10px;">
+            <button onclick="toggleDebugLogs()" style="background: #000000; color: #00ff00; border: 1px solid #00ff00; padding: 5px 10px; cursor: pointer; font-size: 11px;">
+                نمایش/مخفی لاگ‌های Debug
+            </button>
+            <button onclick="clearDebugLogs()" style="background: #000000; color: #ff0000; border: 1px solid #ff0000; padding: 5px 10px; cursor: pointer; font-size: 11px; margin-right: 10px;">
+                پاک کردن لاگ‌ها
+            </button>
+        </div>
+        <div id="debug-logs" style="display: none; background: #000000; border: 1px solid #333333; padding: 10px; max-height: 300px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 10px; color: #00ff00;">
+            <div id="debug-logs-content">در حال بارگذاری...</div>
+        </div>
+    </div>
+
     <script>
         function formatBytes(bytes) {
             if (bytes === 0) return '0 B';
@@ -680,6 +708,59 @@ std::string WebServer::generateMonitorHTML() {
                 updateMonitor();
             }
         });
+
+        let debugLogsVisible = false;
+        let debugLogsInterval = null;
+
+        function toggleDebugLogs() {
+            debugLogsVisible = !debugLogsVisible;
+            const logsDiv = document.getElementById('debug-logs');
+            logsDiv.style.display = debugLogsVisible ? 'block' : 'none';
+            
+            if (debugLogsVisible) {
+                updateDebugLogs();
+                if (debugLogsInterval) clearInterval(debugLogsInterval);
+                debugLogsInterval = setInterval(updateDebugLogs, 2000);
+            } else {
+                if (debugLogsInterval) {
+                    clearInterval(debugLogsInterval);
+                    debugLogsInterval = null;
+                }
+            }
+        }
+
+        function updateDebugLogs() {
+            fetch('/api/debug-logs')
+                .then(response => response.json())
+                .then(data => {
+                    const content = document.getElementById('debug-logs-content');
+                    if (data.logs && data.logs.length > 0) {
+                        content.innerHTML = data.logs.map(log => {
+                            // Escape HTML
+                            const escaped = log.replace(/&/g, '&amp;')
+                                               .replace(/</g, '&lt;')
+                                               .replace(/>/g, '&gt;');
+                            return '<div style="margin-bottom: 2px;">' + escaped + '</div>';
+                        }).join('');
+                        content.scrollTop = content.scrollHeight;
+                    } else {
+                        content.innerHTML = '<div style="color: #888888;">هیچ لاگی وجود ندارد</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching debug logs:', error);
+                    document.getElementById('debug-logs-content').innerHTML = 
+                        '<div style="color: #ff0000;">خطا در بارگذاری لاگ‌ها</div>';
+                });
+        }
+
+        function clearDebugLogs() {
+            if (confirm('آیا مطمئن هستید که می‌خواهید لاگ‌ها را پاک کنید؟')) {
+                fetch('/api/debug-logs/clear', {method: 'POST'})
+                    .then(() => updateDebugLogs())
+                    .catch(error => console.error('Error clearing logs:', error));
+            }
+        }
     </script>
 </body>
 </html>
@@ -1338,6 +1419,49 @@ std::string WebServer::getExecutionLogs(const std::string& container_id) {
     }
     json += "]";
 
+    return json;
+}
+
+void WebServer::addDebugLog(const std::string& message) {
+    std::lock_guard<std::mutex> lock(debug_logs_mutex_);
+    
+    // Get current time
+    time_t now = time(nullptr);
+    char time_str[64];
+    struct tm* tm_info = localtime(&now);
+    strftime(time_str, sizeof(time_str), "%H:%M:%S", tm_info);
+    
+    std::string log_entry = "[" + std::string(time_str) + "] " + message;
+    debug_logs_.push_back(log_entry);
+    
+    // Keep only last MAX_DEBUG_LOGS entries
+    if (debug_logs_.size() > MAX_DEBUG_LOGS) {
+        debug_logs_.erase(debug_logs_.begin(), debug_logs_.begin() + (debug_logs_.size() - MAX_DEBUG_LOGS));
+    }
+}
+
+std::string WebServer::getDebugLogsJSON() {
+    std::lock_guard<std::mutex> lock(debug_logs_mutex_);
+    
+    std::string json = "{\"logs\":[";
+    for (size_t i = 0; i < debug_logs_.size(); ++i) {
+        if (i > 0) json += ",";
+        // Escape quotes and newlines
+        std::string escaped = debug_logs_[i];
+        size_t pos = 0;
+        while ((pos = escaped.find("\"", pos)) != std::string::npos) {
+            escaped.replace(pos, 1, "\\\"");
+            pos += 2;
+        }
+        pos = 0;
+        while ((pos = escaped.find("\n", pos)) != std::string::npos) {
+            escaped.replace(pos, 1, "\\n");
+            pos += 2;
+        }
+        json += "\"" + escaped + "\"";
+    }
+    json += "]}";
+    
     return json;
 }
 

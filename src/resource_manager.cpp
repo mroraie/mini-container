@@ -280,6 +280,7 @@ int resource_manager_init(resource_manager_t *rm, const char *base_path) {
         return -1;
     }
 
+    rm->debug_log_callback = nullptr; // Initialize to null
     rm->initialized = 1;
     return 0;
 }
@@ -476,35 +477,35 @@ int resource_manager_get_stats(resource_manager_t *rm,
                     }
                 }
             } else {
-                fprintf(stderr, "Debug: Failed to read cpu.stat from %s\n", path);
+                DEBUG_LOG(rm, "Debug: Failed to read cpu.stat from %s\n", path);
             }
         } else {
             // cgroup v1: read from cpuacct.usage
             char cpuacct_path[BUF_SIZE];
             if (find_cpuacct_usage_path(rm, container_id, cpuacct_path, sizeof(cpuacct_path)) == 0) {
-                fprintf(stderr, "Debug: Found cpuacct.usage at %s\n", cpuacct_path);
+                DEBUG_LOG(rm, "Debug: Found cpuacct.usage at %s\n", cpuacct_path);
                 if (read_file(cpuacct_path, buffer, sizeof(buffer)) == 0) {
-                    fprintf(stderr, "Debug: Read from cpuacct.usage: '%s'\n", buffer);
+                    DEBUG_LOG(rm, "Debug: Read from cpuacct.usage: '%s'\n", buffer);
                     char *endptr;
                     unsigned long val = strtoul(buffer, &endptr, 10);
                     if (endptr != buffer && (*endptr == '\0' || *endptr == '\n' || *endptr == ' ')) {
                         *cpu_usage = val;
-                        fprintf(stderr, "Debug: Parsed CPU usage: %lu ns\n", val);
+                        DEBUG_LOG(rm, "Debug: Parsed CPU usage: %lu ns\n", val);
                     } else {
-                        fprintf(stderr, "Debug: Failed to parse CPU usage from %s: '%s' (endptr='%s')\n", cpuacct_path, buffer, endptr);
+                        DEBUG_LOG(rm, "Debug: Failed to parse CPU usage from %s: '%s' (endptr='%s')\n", cpuacct_path, buffer, endptr);
                     }
                 } else {
-                    fprintf(stderr, "Debug: Failed to read cpuacct.usage from %s (errno=%d: %s)\n", cpuacct_path, errno, strerror(errno));
+                    DEBUG_LOG(rm, "Debug: Failed to read cpuacct.usage from %s (errno=%d: %s)\n", cpuacct_path, errno, strerror(errno));
                 }
             } else {
-                fprintf(stderr, "Debug: Could not find cpuacct.usage path for container %s\n", container_id);
+                DEBUG_LOG(rm, "Debug: Could not find cpuacct.usage path for container %s\n", container_id);
                 // Try to list possible paths
                 snprintf(path, sizeof(path), "%s/%s_%s/cpuacct.usage", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
-                fprintf(stderr, "Debug: Tried path: %s (exists: %s)\n", path, access(path, F_OK) == 0 ? "yes" : "no");
+                DEBUG_LOG(rm, "Debug: Tried path: %s (exists: %s)\n", path, access(path, F_OK) == 0 ? "yes" : "no");
                 snprintf(path, sizeof(path), "%s/%s_%s/cpuacct.usage", CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
-                fprintf(stderr, "Debug: Tried path: %s (exists: %s)\n", path, access(path, F_OK) == 0 ? "yes" : "no");
+                DEBUG_LOG(rm, "Debug: Tried path: %s (exists: %s)\n", path, access(path, F_OK) == 0 ? "yes" : "no");
                 snprintf(path, sizeof(path), "%s/%s_%s/cpuacct.usage", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-                fprintf(stderr, "Debug: Tried path: %s (exists: %s)\n", path, access(path, F_OK) == 0 ? "yes" : "no");
+                DEBUG_LOG(rm, "Debug: Tried path: %s (exists: %s)\n", path, access(path, F_OK) == 0 ? "yes" : "no");
             }
         }
     }
@@ -520,27 +521,27 @@ int resource_manager_get_stats(resource_manager_t *rm,
                 if (endptr != buffer && (*endptr == '\0' || *endptr == '\n' || *endptr == ' ')) {
                     *memory_usage = val;
                 } else {
-                    fprintf(stderr, "Debug: Failed to parse memory usage from %s: '%s'\n", path, buffer);
+                    DEBUG_LOG(rm, "Debug: Failed to parse memory usage from %s: '%s'\n", path, buffer);
                 }
             } else {
-                fprintf(stderr, "Debug: Failed to read memory.current from %s\n", path);
+                DEBUG_LOG(rm, "Debug: Failed to read memory.current from %s\n", path);
             }
         } else {
             // cgroup v1: read from memory.usage_in_bytes
             snprintf(path, sizeof(path), "%s/%s_%s/memory.usage_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
-            fprintf(stderr, "Debug: Reading memory from %s (exists: %s)\n", path, access(path, F_OK) == 0 ? "yes" : "no");
+            DEBUG_LOG(rm, "Debug: Reading memory from %s (exists: %s)\n", path, access(path, F_OK) == 0 ? "yes" : "no");
             if (read_file(path, buffer, sizeof(buffer)) == 0) {
-                fprintf(stderr, "Debug: Read from memory.usage_in_bytes: '%s'\n", buffer);
+                DEBUG_LOG(rm, "Debug: Read from memory.usage_in_bytes: '%s'\n", buffer);
                 char *endptr;
                 unsigned long val = strtoul(buffer, &endptr, 10);
                 if (endptr != buffer && (*endptr == '\0' || *endptr == '\n' || *endptr == ' ')) {
                     *memory_usage = val;
-                    fprintf(stderr, "Debug: Parsed memory usage: %lu bytes\n", val);
+                    DEBUG_LOG(rm, "Debug: Parsed memory usage: %lu bytes\n", val);
                 } else {
-                    fprintf(stderr, "Debug: Failed to parse memory usage from %s: '%s' (endptr='%s')\n", path, buffer, endptr);
+                    DEBUG_LOG(rm, "Debug: Failed to parse memory usage from %s: '%s' (endptr='%s')\n", path, buffer, endptr);
                 }
             } else {
-                fprintf(stderr, "Debug: Failed to read memory.usage_in_bytes from %s (errno=%d: %s)\n", path, errno, strerror(errno));
+                DEBUG_LOG(rm, "Debug: Failed to read memory.usage_in_bytes from %s (errno=%d: %s)\n", path, errno, strerror(errno));
             }
         }
     }

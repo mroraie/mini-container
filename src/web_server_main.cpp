@@ -16,6 +16,15 @@ static container_manager_t cm;
 static WebServer* web_server = nullptr;
 static bool running = true;
 
+// Global debug log callback
+extern "C" void debug_log_callback(const char* message) {
+    if (web_server) {
+        web_server->addDebugLog(message);
+    }
+    // Also print to stderr
+    fprintf(stderr, "%s", message);
+}
+
 void signal_handler(int signum) {
     (void)signum;  // Suppress unused parameter warning
     cout << "\nShutting down web server..." << endl;
@@ -112,6 +121,11 @@ int main(int argc, char* argv[]) {
 
     // Create web server
     web_server = new WebServer(&cm, port);
+    
+    // Set debug log callback for resource manager
+    if (cm.rm && cm.rm->initialized) {
+        cm.rm->debug_log_callback = debug_log_callback;
+    }
 
     // Set up callbacks
     web_server->setRunCallback(run_container_callback);

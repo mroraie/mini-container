@@ -34,6 +34,7 @@ typedef struct resource_manager {
     char *cgroup_path;
     int initialized;
     cgroup_version_t version;
+    void (*debug_log_callback)(const char*);
 } resource_manager_t;
 
 #ifdef __cplusplus
