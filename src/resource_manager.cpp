@@ -113,17 +113,6 @@ static int read_file(const char *path, char *buffer, size_t size) {
     return 0;
 }
 
-// Helper function to get resource_manager from container_id (for DEBUG_LOG)
-static resource_manager_t* get_rm_for_debug(const char* container_id) {
-    // This is a workaround - we'll pass rm directly in get_stats
-    return nullptr;
-}
-
-// Helper function to get resource_manager from container_id (for DEBUG_LOG)
-static resource_manager_t* get_rm_for_debug(const char* container_id) {
-    // This is a workaround - we'll pass rm directly in get_stats
-    return nullptr;
-}
 
 static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
                          const cpu_limits_t *limits) {
