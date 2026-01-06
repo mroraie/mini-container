@@ -474,7 +474,7 @@ int resource_manager_get_stats(resource_manager_t *rm,
     char buffer[BUF_SIZE];
     
     // Debug: Print cgroup path being checked
-    fprintf(stderr, "Debug: Getting stats for container %s, cgroup_path=%s, version=%s\n", 
+    DEBUG_LOG(rm, "Debug: Getting stats for container %s, cgroup_path=%s, version=%s\n", 
             container_id, rm->cgroup_path, rm->version == CGROUP_V2 ? "v2" : "v1");
 
     if (cpu_usage) {
