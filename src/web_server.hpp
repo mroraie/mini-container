@@ -66,5 +66,6 @@ private:
     
     void addDebugLog(const std::string& message);
     std::string getDebugLogsJSON();
+};
 
 #endif // WEB_SERVER_HPP
