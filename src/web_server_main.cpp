@@ -242,9 +242,9 @@ std::string performance_test_callback(const std::string& container_count_str) {
             // Wait a bit for container to finish
             usleep(100000); // 100ms
             
-            container_info_t* info = container_manager_get_info(&cm, container_id);
+            container_info_t* info = container_manager_get_info(&cm, container_id.c_str());
             if (info && info->state == CONTAINER_RUNNING) {
-                resource_manager_get_stats(cm.rm, container_id, &cpu_usage, &memory_usage);
+                resource_manager_get_stats(cm.rm, container_id.c_str(), &cpu_usage, &memory_usage);
             }
             
             // Try to get calculation result (simplified - in real scenario would capture stdout)
