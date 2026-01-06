@@ -28,11 +28,15 @@ void signal_handler(int signum) {
 
 std::string run_container_callback(const std::string& command, const std::string& memory,
                                  const std::string& cpu, const std::string& hostname,
-                                 const std::string& root_path) {
+                                 const std::string& root_path, const std::string& container_name = "") {
     container_config_t config;
 
     // Initialize config
-    config.id = nullptr;
+    if (!container_name.empty()) {
+        config.id = strdup(container_name.c_str());
+    } else {
+        config.id = nullptr;
+    }
     namespace_config_init(&config.ns_config);
     resource_limits_init(&config.res_limits);
     fs_config_init(&config.fs_config);
@@ -71,6 +75,7 @@ std::string run_container_callback(const std::string& command, const std::string
     }
     free(config.ns_config.hostname);
     free(config.fs_config.root_path);
+    // Note: config.id is managed by container_manager, don't free it here
 
     if (result != 0) {
         return "{\"success\":false,\"error\":\"Failed to create container\"}";

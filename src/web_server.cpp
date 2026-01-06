@@ -156,36 +156,61 @@ std::string WebServer::handleRequest(const std::string& request) {
             std::string cpu = "1024";
             std::string hostname = "container";
             std::string root_path = "/tmp/container_root";
+            std::string container_name = "";
 
             // Simple parsing (in production, use proper form parsing)
             size_t pos = 0;
-            while ((pos = post_data.find('&', pos)) != std::string::npos) {
-                std::string pair = post_data.substr(0, pos);
+            std::string remaining = post_data;
+            while (!remaining.empty()) {
+                pos = remaining.find('&');
+                std::string pair = (pos != std::string::npos) ? remaining.substr(0, pos) : remaining;
+                remaining = (pos != std::string::npos && pos + 1 < remaining.length()) ? remaining.substr(pos + 1) : "";
+                
                 size_t eq_pos = pair.find('=');
                 if (eq_pos != std::string::npos) {
                     std::string key = pair.substr(0, eq_pos);
                     std::string value = pair.substr(eq_pos + 1);
+                    
+                    // URL decode (simple version)
+                    size_t percent_pos = 0;
+                    while ((percent_pos = value.find('%', percent_pos)) != std::string::npos) {
+                        if (percent_pos + 2 < value.length()) {
+                            std::string hex = value.substr(percent_pos + 1, 2);
+                            char decoded = static_cast<char>(std::stoi(hex, nullptr, 16));
+                            value.replace(percent_pos, 3, 1, decoded);
+                        }
+                        percent_pos++;
+                    }
+                    // Replace + with space
+                    size_t plus_pos = 0;
+                    while ((plus_pos = value.find('+', plus_pos)) != std::string::npos) {
+                        value.replace(plus_pos, 1, " ");
+                        plus_pos++;
+                    }
 
                     if (key == "command") command = value;
                     else if (key == "memory") memory = value;
                     else if (key == "cpu") cpu = value;
                     else if (key == "hostname") hostname = value;
                     else if (key == "root_path") root_path = value;
+                    else if (key == "container_name") container_name = value;
                 }
-                post_data = post_data.substr(pos + 1);
             }
 
             if (run_callback_) {
                 // Add execution log
-                std::string container_id = "pending";
+                std::string container_id = container_name.empty() ? "pending" : container_name;
                 addExecutionLog(container_id, "شروع ایجاد کانتینر...");
+                if (!container_name.empty()) {
+                    addExecutionLog(container_id, "نام کانتینر: " + container_name);
+                }
                 addExecutionLog(container_id, "تنظیم محدودیت حافظه: " + memory + " MB");
                 addExecutionLog(container_id, "تنظیم سهمیه CPU: " + cpu);
                 addExecutionLog(container_id, "تنظیم hostname: " + hostname);
                 addExecutionLog(container_id, "تنظیم root path: " + root_path);
                 addExecutionLog(container_id, "اجرای دستور: " + command);
                 
-                std::string result = run_callback_(command, memory, cpu, hostname, root_path);
+                std::string result = run_callback_(command, memory, cpu, hostname, root_path, container_name);
                 
                 // Parse container ID from result
                 size_t id_pos = result.find("\"container_id\":\"");
@@ -459,7 +484,9 @@ std::string WebServer::generateMonitorHTML() {
         const prevUpdateTime = {};
 
         function calculateCPUPercent(containerId, cpuUsageNs, currentTime) {
-            if (!cpuUsageNs || cpuUsageNs === 0) return 0;
+            // Convert to number if needed
+            cpuUsageNs = typeof cpuUsageNs === 'string' ? parseFloat(cpuUsageNs) : cpuUsageNs;
+            if (!cpuUsageNs || isNaN(cpuUsageNs) || cpuUsageNs === 0) return 0;
             
             const prev = prevCpuUsage[containerId];
             const prevTime = prevUpdateTime[containerId];
@@ -471,8 +498,13 @@ std::string WebServer::generateMonitorHTML() {
                 return 0;
             }
             
-            const timeDiff = currentTime - prevTime;
-            if (timeDiff <= 0) return 0;
+            const timeDiff = (currentTime - prevTime) / 1000; // Convert to seconds
+            if (timeDiff <= 0 || timeDiff > 10) {
+                // Reset if time difference is invalid or too large
+                prevCpuUsage[containerId] = cpuUsageNs;
+                prevUpdateTime[containerId] = currentTime;
+                return 0;
+            }
             
             const cpuDiff = cpuUsageNs - prev;
             if (cpuDiff < 0) {
@@ -544,8 +576,12 @@ std::string WebServer::generateMonitorHTML() {
                         const currentTime = Date.now();
                         if (container.state === 'RUNNING') {
                             // Check if cpu_usage exists and is a valid number
-                            const cpuUsage = container.cpu_usage;
-                            if (cpuUsage !== undefined && cpuUsage !== null && typeof cpuUsage === 'number' && cpuUsage >= 0) {
+                            let cpuUsage = container.cpu_usage;
+                            // Convert to number if it's a string
+                            if (typeof cpuUsage === 'string') {
+                                cpuUsage = parseFloat(cpuUsage);
+                            }
+                            if (cpuUsage !== undefined && cpuUsage !== null && !isNaN(cpuUsage) && cpuUsage >= 0) {
                                 cpuPercent = calculateCPUPercent(container.id, cpuUsage, currentTime);
                                 cpuDisplay = cpuPercent.toFixed(1) + '%';
                             } else {
@@ -557,8 +593,12 @@ std::string WebServer::generateMonitorHTML() {
                         let memoryPercent = 0;
                         if (container.state === 'RUNNING') {
                             // Check if memory_usage exists and is a valid number
-                            const memoryUsage = container.memory_usage;
-                            if (memoryUsage !== undefined && memoryUsage !== null && typeof memoryUsage === 'number' && memoryUsage >= 0) {
+                            let memoryUsage = container.memory_usage;
+                            // Convert to number if it's a string
+                            if (typeof memoryUsage === 'string') {
+                                memoryUsage = parseFloat(memoryUsage);
+                            }
+                            if (memoryUsage !== undefined && memoryUsage !== null && !isNaN(memoryUsage) && memoryUsage >= 0) {
                                 memoryDisplay = formatBytes(memoryUsage);
                                 // Assuming 128MB default limit for percentage calculation
                                 const limit = 128 * 1024 * 1024;
@@ -922,8 +962,57 @@ std::string WebServer::generateHTML() {
 
             <form id="run-form">
                 <div class="form-group">
+                    <label for="container_name">نام کانتینر (اختیاری):</label>
+                    <input type="text" id="container_name" name="container_name" placeholder="خالی بگذارید تا خودکار تولید شود">
+                </div>
+
+                <div class="form-group">
+                    <label>دستورات آماده:</label>
+                    <div id="preset-commands" style="max-height: 200px; overflow-y: auto; border: 1px solid #e0e0e0; padding: 10px; background: #f9f9f9;">
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: flex; align-items: center; cursor: pointer; font-weight: normal;">
+                                <input type="checkbox" value="/bin/sh -c &quot;while true; do :; done&quot;" style="margin-left: 8px; width: auto;">
+                                <span>CPU ساده - حلقه بی‌نهایت</span>
+                            </label>
+                        </div>
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: flex; align-items: center; cursor: pointer; font-weight: normal;">
+                                <input type="checkbox" value="/bin/sh -c &quot;i=0; while [ $i -lt 100000000 ]; do i=$((i+1)); done; echo Done&quot;" style="margin-left: 8px; width: auto;">
+                                <span>CPU متوسط - محاسبات ریاضی</span>
+                            </label>
+                        </div>
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: flex; align-items: center; cursor: pointer; font-weight: normal;">
+                                <input type="checkbox" value="/bin/sh -c &quot;i=0; sum=0; while [ $i -lt 50000000 ]; do sum=$((sum + (i*i)%7919)); i=$((i+1)); done; echo $sum&quot;" style="margin-left: 8px; width: auto;">
+                                <span>CPU سنگین - محاسبات پیچیده</span>
+                            </label>
+                        </div>
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: flex; align-items: center; cursor: pointer; font-weight: normal;">
+                                <input type="checkbox" value="/bin/sh -c &quot;dd if=/dev/zero of=/tmp/memtest bs=1M count=32 status=none && rm -f /tmp/memtest && echo Memory test done&quot;" style="margin-left: 8px; width: auto;">
+                                <span>Memory - تخصیص 32MB</span>
+                            </label>
+                        </div>
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: flex; align-items: center; cursor: pointer; font-weight: normal;">
+                                <input type="checkbox" value="/bin/sh -c &quot;dd if=/dev/zero of=/tmp/stress bs=1M count=16 status=none; i=0; while [ $i -lt 10000000 ]; do i=$((i+1)); done; rm -f /tmp/stress; echo Done&quot;" style="margin-left: 8px; width: auto;">
+                                <span>ترکیبی - CPU + Memory</span>
+                            </label>
+                        </div>
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: flex; align-items: center; cursor: pointer; font-weight: normal;">
+                                <input type="checkbox" value="/bin/echo 'Hello from container!'" style="margin-left: 8px; width: auto;">
+                                <span>ساده - تست اولیه</span>
+                            </label>
+                        </div>
+                    </div>
+                    <button type="button" class="btn" onclick="applySelectedCommands()" style="margin-top: 10px; width: auto; padding: 8px 16px; font-size: 12px;">اعمال دستورات انتخاب شده</button>
+                </div>
+
+                <div class="form-group">
                     <label for="command">دستور اجرا:</label>
                     <input type="text" id="command" name="command" value="/bin/echo 'Hello from container!'" required>
+                    <small style="color: #666666; font-size: 12px;">می‌توانید دستورات را از بالا انتخاب کنید یا دستی وارد کنید</small>
                 </div>
 
                 <div class="form-group">
@@ -1023,6 +1112,20 @@ std::string WebServer::generateHTML() {
                     document.getElementById('container-list').innerHTML =
                         '<div class="status error">خطا در بارگذاری لیست کانتینرها</div>';
                 });
+        }
+
+        function applySelectedCommands() {
+            const checkboxes = document.querySelectorAll('#preset-commands input[type="checkbox"]:checked');
+            const commandInput = document.getElementById('command');
+            
+            if (checkboxes.length === 0) {
+                alert('لطفاً حداقل یک دستور را انتخاب کنید');
+                return;
+            }
+            
+            // Combine selected commands with && separator
+            const commands = Array.from(checkboxes).map(cb => cb.value);
+            commandInput.value = commands.join(' && ');
         }
 
         let currentContainerId = null;

@@ -22,7 +22,7 @@ public:
     // Callback functions for container operations
     using ContainerListCallback = std::function<std::string()>;
     using ContainerInfoCallback = std::function<std::string(const std::string&)>;
-    using ContainerRunCallback = std::function<std::string(const std::string&, const std::string&, const std::string&, const std::string&, const std::string&)>;
+    using ContainerRunCallback = std::function<std::string(const std::string&, const std::string&, const std::string&, const std::string&, const std::string&, const std::string&)>;
     using ExecutionLogCallback = std::function<std::string(const std::string&)>;
 
     void setContainerListCallback(ContainerListCallback cb) { list_callback_ = cb; }
