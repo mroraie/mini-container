@@ -441,6 +441,8 @@ int resource_manager_get_stats(resource_manager_t *rm,
                               unsigned long *cpu_usage,
                               unsigned long *memory_usage) {
     if (!rm || !rm->initialized || !container_id) {
+        if (cpu_usage) *cpu_usage = 0;
+        if (memory_usage) *memory_usage = 0;
         return -1;
     }
 
@@ -448,6 +450,7 @@ int resource_manager_get_stats(resource_manager_t *rm,
     char buffer[BUF_SIZE];
 
     if (cpu_usage) {
+        *cpu_usage = 0; // Initialize to 0
         if (rm->version == CGROUP_V2) {
             // cgroup2: read from cpu.stat (format: usage_usec <value>)
             snprintf(path, sizeof(path), "%s/%s_%s/cpu.stat", CGROUP_ROOT, rm->cgroup_path, container_id);
@@ -461,15 +464,15 @@ int resource_manager_get_stats(resource_manager_t *rm,
                     while (*value_start && *value_start != ' ' && *value_start != '\t') value_start++;
                     while (*value_start && (*value_start == ' ' || *value_start == '\t')) value_start++;
                     if (*value_start) {
-                        *cpu_usage = strtoul(value_start, nullptr, 10) * 1000; // Convert microseconds to nanoseconds
-                    } else {
-                        *cpu_usage = 0;
+                        char *endptr;
+                        unsigned long val = strtoul(value_start, &endptr, 10);
+                        if (endptr != value_start) {
+                            *cpu_usage = val * 1000; // Convert microseconds to nanoseconds
+                        }
                     }
-                } else {
-                    *cpu_usage = 0;
                 }
             } else {
-                *cpu_usage = 0;
+                fprintf(stderr, "Debug: Failed to read cpu.stat from %s\n", path);
             }
         } else {
             // cgroup v1: read from cpuacct.usage
@@ -478,34 +481,35 @@ int resource_manager_get_stats(resource_manager_t *rm,
                 if (read_file(cpuacct_path, buffer, sizeof(buffer)) == 0) {
                     char *endptr;
                     unsigned long val = strtoul(buffer, &endptr, 10);
-                    if (*endptr == '\0' || *endptr == '\n' || *endptr == ' ') {
+                    if (endptr != buffer && (*endptr == '\0' || *endptr == '\n' || *endptr == ' ')) {
                         *cpu_usage = val;
                     } else {
-                        *cpu_usage = 0;
+                        fprintf(stderr, "Debug: Failed to parse CPU usage from %s: '%s'\n", cpuacct_path, buffer);
                     }
                 } else {
-                    *cpu_usage = 0;
+                    fprintf(stderr, "Debug: Failed to read cpuacct.usage from %s\n", cpuacct_path);
                 }
             } else {
-                *cpu_usage = 0;
+                fprintf(stderr, "Debug: Could not find cpuacct.usage path for container %s\n", container_id);
             }
         }
     }
 
     if (memory_usage) {
+        *memory_usage = 0; // Initialize to 0
         if (rm->version == CGROUP_V2) {
             // cgroup2: read from memory.current
             snprintf(path, sizeof(path), "%s/%s_%s/memory.current", CGROUP_ROOT, rm->cgroup_path, container_id);
             if (read_file(path, buffer, sizeof(buffer)) == 0) {
                 char *endptr;
                 unsigned long val = strtoul(buffer, &endptr, 10);
-                if (*endptr == '\0' || *endptr == '\n' || *endptr == ' ') {
+                if (endptr != buffer && (*endptr == '\0' || *endptr == '\n' || *endptr == ' ')) {
                     *memory_usage = val;
                 } else {
-                    *memory_usage = 0;
+                    fprintf(stderr, "Debug: Failed to parse memory usage from %s: '%s'\n", path, buffer);
                 }
             } else {
-                *memory_usage = 0;
+                fprintf(stderr, "Debug: Failed to read memory.current from %s\n", path);
             }
         } else {
             // cgroup v1: read from memory.usage_in_bytes
@@ -513,13 +517,13 @@ int resource_manager_get_stats(resource_manager_t *rm,
             if (read_file(path, buffer, sizeof(buffer)) == 0) {
                 char *endptr;
                 unsigned long val = strtoul(buffer, &endptr, 10);
-                if (*endptr == '\0' || *endptr == '\n' || *endptr == ' ') {
+                if (endptr != buffer && (*endptr == '\0' || *endptr == '\n' || *endptr == ' ')) {
                     *memory_usage = val;
                 } else {
-                    *memory_usage = 0;
+                    fprintf(stderr, "Debug: Failed to parse memory usage from %s: '%s'\n", path, buffer);
                 }
             } else {
-                *memory_usage = 0;
+                fprintf(stderr, "Debug: Failed to read memory.usage_in_bytes from %s\n", path);
             }
         }
     }
