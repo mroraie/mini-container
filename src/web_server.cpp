@@ -2,6 +2,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <cerrno>
 #include <cstring>
 #include <sstream>
 #include <iostream>
@@ -41,8 +42,15 @@ void WebServer::serverThread() {
     // Create socket
     server_socket_ = socket(AF_INET, SOCK_STREAM, 0);
     if (server_socket_ == -1) {
-        std::cerr << "Failed to create socket" << std::endl;
+        std::cerr << "Failed to create socket: " << strerror(errno) << std::endl;
         return;
+    }
+
+    // Set SO_REUSEADDR to allow reuse of the port
+    int reuse = 1;
+    if (setsockopt(server_socket_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == -1) {
+        std::cerr << "Warning: Failed to set SO_REUSEADDR: " << strerror(errno) << std::endl;
+        // Continue anyway
     }
 
     // Bind socket
@@ -52,8 +60,10 @@ void WebServer::serverThread() {
     server_addr.sin_port = htons(port_);
 
     if (bind(server_socket_, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
-        std::cerr << "Failed to bind socket" << std::endl;
+        std::cerr << "Failed to bind socket on port " << port_ << ": " << strerror(errno) << std::endl;
+        std::cerr << "Port " << port_ << " may already be in use. Try a different port or kill the process using it." << std::endl;
         close(server_socket_);
+        server_socket_ = -1;
         return;
     }
 
