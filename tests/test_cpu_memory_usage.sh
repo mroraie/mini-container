@@ -125,16 +125,16 @@ echo -e "\n${YELLOW}Test 1: CPU-intensive infinite loop${NC}"
 ROOT_PATH="/tmp/container_root_test_cpu_$(date +%s)_$$"
 echo "Running: /bin/sh -c 'while true; do :; done'"
 
-# Run in background and capture output
-RUN_OUTPUT=$($CONTAINER_BIN run --memory 128 --cpu 1024 --hostname "test-cpu" --root "$ROOT_PATH" /bin/sh -c "while true; do :; done" 2>&1 &)
+# Run in detached mode and capture output
+RUN_OUTPUT=$($CONTAINER_BIN run --detach --memory 128 --cpu 1024 --hostname "test-cpu" --root "$ROOT_PATH" /bin/sh -c "while true; do :; done" 2>&1)
 sleep 2
 
-# Get container ID from list (first running container)
-CONTAINER_ID=$($CONTAINER_BIN list 2>/dev/null | grep "RUNNING" | head -1 | awk '{print $1}' || echo "")
+# Extract container ID from output
+CONTAINER_ID=$(echo "$RUN_OUTPUT" | grep -oE "Container [^ ]+ started" | awk '{print $2}' || echo "")
 
 if [ -z "$CONTAINER_ID" ]; then
-    # Try to get from output
-    CONTAINER_ID=$(echo "$RUN_OUTPUT" | grep -oE "Container [^ ]+ started" | awk '{print $2}' || echo "")
+    # Try to get from list (first running container)
+    CONTAINER_ID=$($CONTAINER_BIN list 2>/dev/null | grep "RUNNING" | head -1 | awk '{print $1}' || echo "")
 fi
 
 if [ -n "$CONTAINER_ID" ]; then
@@ -157,16 +157,16 @@ echo -e "\n${YELLOW}Test 2: CPU-intensive calculation${NC}"
 ROOT_PATH="/tmp/container_root_test_cpu_calc_$(date +%s)_$$"
 echo "Running: /bin/sh -c 'i=0; while [ \$i -lt 100000000 ]; do i=\$((i+1)); done'"
 
-# Run in background and capture output
-RUN_OUTPUT=$($CONTAINER_BIN run --memory 128 --cpu 1024 --hostname "test-cpu-calc" --root "$ROOT_PATH" /bin/sh -c "i=0; while [ \$i -lt 100000000 ]; do i=\$((i+1)); done; echo Done" 2>&1 &)
+# Run in detached mode and capture output
+RUN_OUTPUT=$($CONTAINER_BIN run --detach --memory 128 --cpu 1024 --hostname "test-cpu-calc" --root "$ROOT_PATH" /bin/sh -c "i=0; while [ \$i -lt 100000000 ]; do i=\$((i+1)); done; echo Done" 2>&1)
 sleep 2
 
-# Get container ID from list (first running container)
-CONTAINER_ID=$($CONTAINER_BIN list 2>/dev/null | grep "RUNNING" | head -1 | awk '{print $1}' || echo "")
+# Extract container ID from output
+CONTAINER_ID=$(echo "$RUN_OUTPUT" | grep -oE "Container [^ ]+ started" | awk '{print $2}' || echo "")
 
 if [ -z "$CONTAINER_ID" ]; then
-    # Try to get from output
-    CONTAINER_ID=$(echo "$RUN_OUTPUT" | grep -oE "Container [^ ]+ started" | awk '{print $2}' || echo "")
+    # Try to get from list (first running container)
+    CONTAINER_ID=$($CONTAINER_BIN list 2>/dev/null | grep "RUNNING" | head -1 | awk '{print $1}' || echo "")
 fi
 
 if [ -n "$CONTAINER_ID" ]; then
@@ -189,16 +189,16 @@ echo -e "\n${YELLOW}Test 3: Memory-intensive command${NC}"
 ROOT_PATH="/tmp/container_root_test_mem_$(date +%s)_$$"
 echo "Running: dd if=/dev/zero of=/tmp/memtest bs=1M count=32"
 
-# Run in background and capture output
-RUN_OUTPUT=$($CONTAINER_BIN run --memory 64 --cpu 1024 --hostname "test-mem" --root "$ROOT_PATH" /bin/sh -c "dd if=/dev/zero of=/tmp/memtest bs=1M count=32 && sleep 2 && rm -f /tmp/memtest" 2>&1 &)
+# Run in detached mode and capture output
+RUN_OUTPUT=$($CONTAINER_BIN run --detach --memory 64 --cpu 1024 --hostname "test-mem" --root "$ROOT_PATH" /bin/sh -c "dd if=/dev/zero of=/tmp/memtest bs=1M count=32 && sleep 2 && rm -f /tmp/memtest" 2>&1)
 sleep 2
 
-# Get container ID from list (first running container)
-CONTAINER_ID=$($CONTAINER_BIN list 2>/dev/null | grep "RUNNING" | head -1 | awk '{print $1}' || echo "")
+# Extract container ID from output
+CONTAINER_ID=$(echo "$RUN_OUTPUT" | grep -oE "Container [^ ]+ started" | awk '{print $2}' || echo "")
 
 if [ -z "$CONTAINER_ID" ]; then
-    # Try to get from output
-    CONTAINER_ID=$(echo "$RUN_OUTPUT" | grep -oE "Container [^ ]+ started" | awk '{print $2}' || echo "")
+    # Try to get from list (first running container)
+    CONTAINER_ID=$($CONTAINER_BIN list 2>/dev/null | grep "RUNNING" | head -1 | awk '{print $1}' || echo "")
 fi
 
 if [ -n "$CONTAINER_ID" ]; then
@@ -221,16 +221,16 @@ echo -e "\n${YELLOW}Test 4: Combined CPU + Memory intensive${NC}"
 ROOT_PATH="/tmp/container_root_test_combined_$(date +%s)_$$"
 echo "Running: CPU + Memory intensive command"
 
-# Run in background and capture output
-RUN_OUTPUT=$($CONTAINER_BIN run --memory 128 --cpu 1024 --hostname "test-combined" --root "$ROOT_PATH" /bin/sh -c "dd if=/dev/zero of=/tmp/stress bs=1M count=16 && i=0; while [ \$i -lt 10000000 ]; do i=\$((i+1)); done; rm -f /tmp/stress" 2>&1 &)
+# Run in detached mode and capture output
+RUN_OUTPUT=$($CONTAINER_BIN run --detach --memory 128 --cpu 1024 --hostname "test-combined" --root "$ROOT_PATH" /bin/sh -c "dd if=/dev/zero of=/tmp/stress bs=1M count=16 && i=0; while [ \$i -lt 10000000 ]; do i=\$((i+1)); done; rm -f /tmp/stress" 2>&1)
 sleep 2
 
-# Get container ID from list (first running container)
-CONTAINER_ID=$($CONTAINER_BIN list 2>/dev/null | grep "RUNNING" | head -1 | awk '{print $1}' || echo "")
+# Extract container ID from output
+CONTAINER_ID=$(echo "$RUN_OUTPUT" | grep -oE "Container [^ ]+ started" | awk '{print $2}' || echo "")
 
 if [ -z "$CONTAINER_ID" ]; then
-    # Try to get from output
-    CONTAINER_ID=$(echo "$RUN_OUTPUT" | grep -oE "Container [^ ]+ started" | awk '{print $2}' || echo "")
+    # Try to get from list (first running container)
+    CONTAINER_ID=$($CONTAINER_BIN list 2>/dev/null | grep "RUNNING" | head -1 | awk '{print $1}' || echo "")
 fi
 
 if [ -n "$CONTAINER_ID" ]; then
