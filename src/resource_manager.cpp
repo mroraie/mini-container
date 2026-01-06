@@ -367,42 +367,54 @@ int resource_manager_add_process(resource_manager_t *rm,
     if (rm->version == CGROUP_V2) {
         // cgroup2 uses cgroup.procs
         snprintf(path, sizeof(path), "%s/%s_%s/cgroup.procs", CGROUP_ROOT, rm->cgroup_path, container_id);
+        DEBUG_LOG(rm, "Debug: Adding process %d to cgroup v2: %s\n", pid, path);
         if (write_file(path, pid_str) != 0) {
-            fprintf(stderr, "Warning: failed to add process %d to cgroup v2: %s\n", pid, path);
+            DEBUG_LOG(rm, "Warning: failed to add process %d to cgroup v2: %s (errno=%d: %s)\n", pid, path, errno, strerror(errno));
             return -1;
         }
+        DEBUG_LOG(rm, "Debug: Successfully added process %d to cgroup v2\n", pid);
     } else {
         // cgroup v1 uses tasks
         int added = 0;
         
         // Try cpu,cpuacct first (most common)
         snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
+        DEBUG_LOG(rm, "Debug: Trying to add process %d to cgroup v1: %s\n", pid, path);
         if (write_file(path, pid_str) == 0) {
             added = 1;
+            DEBUG_LOG(rm, "Debug: Successfully added process %d to cpu,cpuacct cgroup\n", pid);
         } else {
+            DEBUG_LOG(rm, "Debug: Failed to add to cpu,cpuacct (errno=%d: %s), trying fallback...\n", errno, strerror(errno));
             // Fallback to separate cpu and cpuacct
             snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
             if (write_file(path, pid_str) == 0) {
                 added = 1;
+                DEBUG_LOG(rm, "Debug: Successfully added process %d to CPU cgroup\n", pid);
             } else {
-                fprintf(stderr, "Warning: failed to add process %d to CPU cgroup: %s\n", pid, path);
+                DEBUG_LOG(rm, "Warning: failed to add process %d to CPU cgroup: %s (errno=%d: %s)\n", pid, path, errno, strerror(errno));
             }
             
             snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
             if (write_file(path, pid_str) == 0) {
                 added = 1;
+                DEBUG_LOG(rm, "Debug: Successfully added process %d to cpuacct cgroup\n", pid);
+            } else {
+                DEBUG_LOG(rm, "Debug: Failed to add to cpuacct cgroup (errno=%d: %s)\n", errno, strerror(errno));
             }
             // cpuacct might not exist separately, continue
         }
 
         if (!added) {
-            fprintf(stderr, "Warning: failed to add process %d to any CPU cgroup\n", pid);
+            DEBUG_LOG(rm, "Warning: failed to add process %d to any CPU cgroup\n", pid);
         }
 
         snprintf(path, sizeof(path), "%s/%s_%s/tasks", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
+        DEBUG_LOG(rm, "Debug: Adding process %d to memory cgroup: %s\n", pid, path);
         if (write_file(path, pid_str) != 0) {
-            fprintf(stderr, "Warning: failed to add process %d to memory cgroup: %s\n", pid, path);
+            DEBUG_LOG(rm, "Warning: failed to add process %d to memory cgroup: %s (errno=%d: %s)\n", pid, path, errno, strerror(errno));
             // Don't fail completely if memory cgroup fails
+        } else {
+            DEBUG_LOG(rm, "Debug: Successfully added process %d to memory cgroup\n", pid);
         }
     }
 
