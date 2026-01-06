@@ -192,18 +192,14 @@ std::string performance_test_callback(const std::string& container_count_str) {
         snprintf(root_path, sizeof(root_path), "/tmp/perf_test_root_%d", i);
         test_config.fs_config.root_path = strdup(root_path);
         
-        // Create a simple calculation command (using sh to calculate primes)
-        // We'll use a simple shell script that does CPU-intensive work
+        // Create a mixed CPU + memory workload to surface resource stats
         std::string calc_cmd = "/bin/sh -c '";
-        calc_cmd += "n=10000; count=0; ";
-        calc_cmd += "for i in $(seq 2 $n); do ";
-        calc_cmd += "  prime=1; ";
-        calc_cmd += "  for j in $(seq 2 $((i-1))); do ";
-        calc_cmd += "    if [ $((i % j)) -eq 0 ]; then prime=0; break; fi; ";
-        calc_cmd += "  done; ";
-        calc_cmd += "  if [ $prime -eq 1 ]; then count=$((count+1)); fi; ";
-        calc_cmd += "done; ";
-        calc_cmd += "echo $count'";
+        // Allocate ~16MB via dd (charged to cgroup if configured), then CPU loop
+        calc_cmd += "dd if=/dev/zero of=/tmp/stress_mem bs=1M count=16 status=none 2>/dev/null; ";
+        calc_cmd += "n=40000; i=0; sum=0; ";
+        calc_cmd += "while [ $i -lt $n ]; do sum=$((sum + (i*i)%7919)); i=$((i+1)); done; ";
+        calc_cmd += "rm -f /tmp/stress_mem; ";
+        calc_cmd += "echo $sum'";
         
         // Parse command
         std::vector<char*> args;
@@ -239,11 +235,11 @@ std::string performance_test_callback(const std::string& container_count_str) {
         if (result == 0 && test_config.id) {
             container_id = test_config.id;
             
-            // Wait a bit for container to finish
-            usleep(100000); // 100ms
+            // Wait a bit for the workload to consume measurable resources
+            usleep(200000); // 200ms
             
             container_info_t* info = container_manager_get_info(&cm, container_id.c_str());
-            if (info && info->state == CONTAINER_RUNNING) {
+            if (info) {
                 resource_manager_get_stats(cm.rm, container_id.c_str(), &cpu_usage, &memory_usage);
             }
             
