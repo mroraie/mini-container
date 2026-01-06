@@ -60,17 +60,39 @@ std::string run_container_callback(const std::string& command, const std::string
     // Set root path
     config.fs_config.root_path = strdup(root_path.c_str());
 
-    // Parse command (simple parsing for demo)
+    // Parse command - handle quoted strings properly
     std::vector<char*> args;
     std::string cmd = command;
-    size_t pos = 0;
-    std::string token;
-    while ((pos = cmd.find(' ')) != std::string::npos) {
-        token = cmd.substr(0, pos);
-        args.push_back(strdup(token.c_str()));
-        cmd.erase(0, pos + 1);
+    bool in_quotes = false;
+    char quote_char = 0;
+    std::string current_arg;
+    
+    for (size_t i = 0; i < cmd.length(); ++i) {
+        char c = cmd[i];
+        
+        if ((c == '"' || c == '\'') && (i == 0 || cmd[i-1] != '\\')) {
+            if (!in_quotes) {
+                in_quotes = true;
+                quote_char = c;
+            } else if (c == quote_char) {
+                in_quotes = false;
+                quote_char = 0;
+            } else {
+                current_arg += c;
+            }
+        } else if (c == ' ' && !in_quotes) {
+            if (!current_arg.empty()) {
+                args.push_back(strdup(current_arg.c_str()));
+                current_arg.clear();
+            }
+        } else {
+            current_arg += c;
+        }
     }
-    args.push_back(strdup(cmd.c_str()));
+    
+    if (!current_arg.empty()) {
+        args.push_back(strdup(current_arg.c_str()));
+    }
     args.push_back(nullptr);
 
     config.command = args.data();

@@ -113,6 +113,12 @@ static int read_file(const char *path, char *buffer, size_t size) {
     return 0;
 }
 
+// Helper function to get resource_manager from container_id (for DEBUG_LOG)
+static resource_manager_t* get_rm_for_debug(const char* container_id) {
+    // This is a workaround - we'll pass rm directly in get_stats
+    return nullptr;
+}
+
 static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
                          const cpu_limits_t *limits) {
     char path[BUF_SIZE];
@@ -482,11 +488,14 @@ int resource_manager_get_stats(resource_manager_t *rm,
         if (rm->version == CGROUP_V2) {
             // cgroup2: read from cpu.stat (format: usage_usec <value>)
             snprintf(path, sizeof(path), "%s/%s_%s/cpu.stat", CGROUP_ROOT, rm->cgroup_path, container_id);
+            DEBUG_LOG(rm, "Debug: Attempting to read cpu.stat from %s\n", path);
             if (read_file(path, buffer, sizeof(buffer)) == 0) {
+                DEBUG_LOG(rm, "Debug: Successfully read cpu.stat, content length: %zu, content: '%s'\n", strlen(buffer), buffer);
                 // Parse usage_usec from cpu.stat
                 // Format: usage_usec <value>\n
                 char *usage_line = strstr(buffer, "usage_usec");
                 if (usage_line) {
+                    DEBUG_LOG(rm, "Debug: Found usage_usec line in cpu.stat\n");
                     // Skip "usage_usec" and whitespace
                     char *value_start = usage_line;
                     while (*value_start && *value_start != ' ' && *value_start != '\t') value_start++;
@@ -496,11 +505,18 @@ int resource_manager_get_stats(resource_manager_t *rm,
                         unsigned long val = strtoul(value_start, &endptr, 10);
                         if (endptr != value_start) {
                             *cpu_usage = val * 1000; // Convert microseconds to nanoseconds
+                            DEBUG_LOG(rm, "Debug: Parsed CPU usage from cpu.stat: %lu microseconds = %lu nanoseconds\n", val, *cpu_usage);
+                        } else {
+                            DEBUG_LOG(rm, "Debug: Failed to parse usage_usec value from '%s'\n", value_start);
                         }
+                    } else {
+                        DEBUG_LOG(rm, "Debug: No value found after usage_usec in cpu.stat\n");
                     }
+                } else {
+                    DEBUG_LOG(rm, "Debug: usage_usec not found in cpu.stat content\n");
                 }
             } else {
-                DEBUG_LOG(rm, "Debug: Failed to read cpu.stat from %s\n", path);
+                DEBUG_LOG(rm, "Debug: Failed to read cpu.stat from %s (errno=%d: %s)\n", path, errno, strerror(errno));
             }
         } else {
             // cgroup v1: read from cpuacct.usage
@@ -538,16 +554,19 @@ int resource_manager_get_stats(resource_manager_t *rm,
         if (rm->version == CGROUP_V2) {
             // cgroup2: read from memory.current
             snprintf(path, sizeof(path), "%s/%s_%s/memory.current", CGROUP_ROOT, rm->cgroup_path, container_id);
+            DEBUG_LOG(rm, "Debug: Attempting to read memory.current from %s\n", path);
             if (read_file(path, buffer, sizeof(buffer)) == 0) {
+                DEBUG_LOG(rm, "Debug: Successfully read memory.current, content: '%s'\n", buffer);
                 char *endptr;
                 unsigned long val = strtoul(buffer, &endptr, 10);
                 if (endptr != buffer && (*endptr == '\0' || *endptr == '\n' || *endptr == ' ')) {
                     *memory_usage = val;
+                    DEBUG_LOG(rm, "Debug: Parsed memory usage: %lu bytes\n", val);
                 } else {
-                    DEBUG_LOG(rm, "Debug: Failed to parse memory usage from %s: '%s'\n", path, buffer);
+                    DEBUG_LOG(rm, "Debug: Failed to parse memory usage from %s: '%s' (endptr='%s')\n", path, buffer, endptr);
                 }
             } else {
-                DEBUG_LOG(rm, "Debug: Failed to read memory.current from %s\n", path);
+                DEBUG_LOG(rm, "Debug: Failed to read memory.current from %s (errno=%d: %s)\n", path, errno, strerror(errno));
             }
         } else {
             // cgroup v1: read from memory.usage_in_bytes
