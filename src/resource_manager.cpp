@@ -22,6 +22,17 @@ using namespace std;
 
 #define BUF_SIZE 512
 
+// Macro for debug logging
+#define DEBUG_LOG(rm, fmt, ...) do { \
+    char debug_msg[BUF_SIZE * 2]; \
+    snprintf(debug_msg, sizeof(debug_msg), fmt, ##__VA_ARGS__); \
+    if ((rm) && (rm)->debug_log_callback) { \
+        (rm)->debug_log_callback(debug_msg); \
+    } else { \
+        fprintf(stderr, "%s", debug_msg); \
+    } \
+} while(0)
+
 // Helper function to find the correct cpuacct.usage file path for v1
 static int find_cpuacct_usage_path(resource_manager_t *rm, const char *container_id, char *path, size_t path_size) {
     // Try cpu,cpuacct first (most common)
