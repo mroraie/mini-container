@@ -4,10 +4,6 @@
 #include <cstdio>
 #include <cstring>
 #include <unistd.h>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <unistd.h>
 #include <getopt.h>
 #include <csignal>
 #include "../include/container_manager.hpp"
