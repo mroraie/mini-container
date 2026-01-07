@@ -1,19 +1,46 @@
 # Compiled executables
 mini-container
 *.exe
+*.out
+*.bin
 
 # Object files
 *.o
+*.obj
 src/*.o
+src/*.obj
 
 # Build artifacts
-*.out
+build/
+cmake-build-*/
+Debug/
+Release/
+RelWithDebInfo/
+MinSizeRel/
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
 
 # IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
 
 # OS generated files
 .DS_Store
@@ -23,18 +50,49 @@ src/*.o
 .Trashes
 ehthumbs.db
 Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
 # Temporary files
 *~
 *.tmp
 *.bak
+*.swp
+*.swo
+*.orig
 
 # Log files
 *.log
+logs/
 
 # Container runtime files
 /tmp/container_*
 /tmp/mini_container*
+/tmp/*.log
 
 # Development files
 docs1/
+
+# Coverage reports
+*.gcov
+*.gcda
+*.gcno
+coverage/
+*.info
+
+# Valgrind
+valgrind-out.txt
+vgcore.*
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Package managers
+conan.lock
+vcpkg_installed/
+
+# Test artifacts
+test_results/
+*.test
+test_*.sh.log

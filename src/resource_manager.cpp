@@ -499,6 +499,19 @@ int resource_manager_get_stats(resource_manager_t *rm,
     // Debug: Print cgroup path being checked
     DEBUG_LOG(rm, "Debug: Getting stats for container %s, cgroup_path=%s, version=%s\n", 
             container_id, rm->cgroup_path, rm->version == CGROUP_V2 ? "v2" : "v1");
+    
+    // For cgroup v2, check if there are any processes in the cgroup
+    if (rm->version == CGROUP_V2) {
+        snprintf(path, sizeof(path), "%s/%s_%s/cgroup.procs", CGROUP_ROOT, rm->cgroup_path, container_id);
+        if (read_file(path, buffer, sizeof(buffer), rm) == 0) {
+            // Check if there are any PIDs in cgroup.procs
+            if (strlen(buffer) > 0 && buffer[0] != '\n' && buffer[0] != '\0') {
+                DEBUG_LOG(rm, "Debug: Found processes in cgroup.procs: '%s'\n", buffer);
+            } else {
+                DEBUG_LOG(rm, "Debug: No processes found in cgroup.procs (container may have finished)\n");
+            }
+        }
+    }
 
     if (cpu_usage) {
         *cpu_usage = 0; // Initialize to 0

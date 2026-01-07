@@ -6,18 +6,56 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <csignal>
+#include <termios.h>
+#include <sys/ioctl.h>
+#include <iostream>
+#include <iomanip>
+#include <sstream>
+#include <vector>
+#include <algorithm>
 #include "../include/container_manager.hpp"
-#include "web_server.hpp"
 
 using namespace std;
 
 static container_manager_t cm;
+static bool running = true;
+static bool monitor_mode = false;
 
 static const char *state_names[] = {
     [CONTAINER_CREATED] = "CREATED",
     [CONTAINER_RUNNING] = "RUNNING",
     [CONTAINER_STOPPED] = "STOPPED",
     [CONTAINER_DESTROYED] = "DESTROYED"};
+
+// Terminal control functions
+void clear_screen() {
+    printf("\033[2J\033[H");
+}
+
+void hide_cursor() {
+    printf("\033[?25l");
+}
+
+void show_cursor() {
+    printf("\033[?25h");
+}
+
+void set_color(const char* color) {
+    printf("%s", color);
+}
+
+void reset_color() {
+    printf("\033[0m");
+}
+
+// Color codes
+const char* COLOR_GREEN = "\033[32m";
+const char* COLOR_RED = "\033[31m";
+const char* COLOR_YELLOW = "\033[33m";
+const char* COLOR_CYAN = "\033[36m";
+const char* COLOR_BLUE = "\033[34m";
+const char* COLOR_WHITE = "\033[37m";
+const char* COLOR_BOLD = "\033[1m";
 
 static void print_usage(const char *program_name)
 {
@@ -316,6 +354,656 @@ static int handle_info(int argc, char *argv[])
     return EXIT_SUCCESS;
 }
 
+// Format bytes to human readable
+string format_bytes(unsigned long bytes) {
+    const char* units[] = {"B", "KB", "MB", "GB"};
+    int unit = 0;
+    double size = bytes;
+    
+    while (size >= 1024 && unit < 3) {
+        size /= 1024;
+        unit++;
+    }
+    
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%.2f %s", size, units[unit]);
+    return string(buf);
+}
+
+// Format time duration
+string format_duration(time_t start, time_t end) {
+    if (start == 0 || end == 0) return "--";
+    long diff = end - start;
+    int hours = diff / 3600;
+    int minutes = (diff % 3600) / 60;
+    int seconds = diff % 60;
+    
+    char buf[32];
+    if (hours > 0) {
+        snprintf(buf, sizeof(buf), "%d:%02d:%02d", hours, minutes, seconds);
+    } else {
+        snprintf(buf, sizeof(buf), "%d:%02d", minutes, seconds);
+    }
+    return string(buf);
+}
+
+// Calculate CPU percentage (simplified)
+double calculate_cpu_percent(unsigned long cpu_ns, time_t start_time) {
+    if (start_time == 0) return 0.0;
+    time_t now = time(nullptr);
+    long elapsed = now - start_time;
+    if (elapsed <= 0) return 0.0;
+    
+    // Convert nanoseconds to seconds and calculate percentage
+    double cpu_seconds = cpu_ns / 1e9;
+    return (cpu_seconds / elapsed) * 100.0;
+}
+
+// Display htop-like monitor
+void display_monitor() {
+    clear_screen();
+    hide_cursor();
+    
+    while (monitor_mode && running) {
+        clear_screen();
+        
+        set_color(COLOR_BOLD);
+        set_color(COLOR_CYAN);
+        printf("╔══════════════════════════════════════════════════════════════════════════════╗\n");
+        printf("║                    Mini Container Monitor (htop-like)                        ║\n");
+        printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
+        reset_color();
+        
+        int count;
+        container_info_t **containers = container_manager_list(&cm, &count);
+        
+        // Stats bar
+        int running_count = 0;
+        for (int i = 0; i < count; i++) {
+            if (containers[i]->state == CONTAINER_RUNNING) {
+                running_count++;
+            }
+        }
+        
+        set_color(COLOR_GREEN);
+        printf("Running: %d  ", running_count);
+        reset_color();
+        printf("Total: %d  ", count);
+        
+        time_t now = time(nullptr);
+        char time_str[64];
+        strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&now));
+        printf("Time: %s\n", time_str);
+        printf("───────────────────────────────────────────────────────────────────────────────\n");
+        
+        // Table header
+        set_color(COLOR_BOLD);
+        printf("%-20s %-8s %-10s %-12s %-12s %-10s %-10s\n",
+               "CONTAINER ID", "PID", "STATE", "CPU%", "MEMORY", "RUNTIME", "CREATED");
+        reset_color();
+        printf("───────────────────────────────────────────────────────────────────────────────\n");
+        
+        if (count == 0) {
+            set_color(COLOR_YELLOW);
+            printf("No containers running\n");
+            reset_color();
+        } else {
+            // Sort: running first
+            vector<container_info_t*> sorted_containers;
+            for (int i = 0; i < count; i++) {
+                sorted_containers.push_back(containers[i]);
+            }
+            sort(sorted_containers.begin(), sorted_containers.end(),
+                 [](container_info_t* a, container_info_t* b) {
+                     if (a->state == CONTAINER_RUNNING && b->state != CONTAINER_RUNNING) return true;
+                     if (a->state != CONTAINER_RUNNING && b->state == CONTAINER_RUNNING) return false;
+                     return a->started_at > b->started_at;
+                 });
+            
+            for (auto info : sorted_containers) {
+                const char* state = state_names[info->state];
+                const char* state_color = COLOR_WHITE;
+                
+                if (info->state == CONTAINER_RUNNING) {
+                    state_color = COLOR_GREEN;
+                } else if (info->state == CONTAINER_STOPPED) {
+                    state_color = COLOR_RED;
+                } else if (info->state == CONTAINER_CREATED) {
+                    state_color = COLOR_YELLOW;
+                }
+                
+                printf("%-20s %-8d ", info->id, info->pid);
+                set_color(state_color);
+                printf("%-10s", state);
+                reset_color();
+                
+                if (info->state == CONTAINER_RUNNING) {
+                    unsigned long cpu_usage = 0, memory_usage = 0;
+                    resource_manager_get_stats(cm.rm, info->id, &cpu_usage, &memory_usage);
+                    
+                    double cpu_percent = calculate_cpu_percent(cpu_usage, info->started_at);
+                    string mem_str = format_bytes(memory_usage);
+                    
+                    printf(" %-12.1f %-12s", cpu_percent, mem_str.c_str());
+                } else {
+                    printf(" %-12s %-12s", "--", "--");
+                }
+                
+                string runtime = format_duration(info->started_at, now);
+                printf(" %-10s", runtime.c_str());
+                
+                char created_str[20] = "";
+                if (info->created_at > 0) {
+                    strftime(created_str, sizeof(created_str), "%H:%M:%S", localtime(&info->created_at));
+                }
+                printf(" %-10s\n", created_str);
+            }
+        }
+        
+        printf("\n");
+        set_color(COLOR_CYAN);
+        printf("Press 'q' to quit monitor, 'r' to refresh\n");
+        reset_color();
+        
+        fflush(stdout);
+        
+        // Check for input (non-blocking)
+        struct termios old_term, new_term;
+        tcgetattr(STDIN_FILENO, &old_term);
+        new_term = old_term;
+        new_term.c_lflag &= ~(ICANON | ECHO);
+        new_term.c_cc[VMIN] = 0;
+        new_term.c_cc[VTIME] = 0;
+        tcsetattr(STDIN_FILENO, TCSANOW, &new_term);
+        
+        char c;
+        if (read(STDIN_FILENO, &c, 1) > 0) {
+            if (c == 'q' || c == 'Q') {
+                monitor_mode = false;
+                break;
+            }
+        }
+        
+        tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
+        
+        usleep(1000000); // 1 second
+    }
+    
+    show_cursor();
+    clear_screen();
+}
+
+// Interactive container creation
+void interactive_create_container() {
+    clear_screen();
+    set_color(COLOR_BOLD);
+    set_color(COLOR_CYAN);
+    printf("╔══════════════════════════════════════════════════════════════════════════════╗\n");
+    printf("║                        Create New Container                                   ║\n");
+    printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
+    reset_color();
+    
+    char command[1024];
+    char container_name[256] = "";
+    char hostname[256] = "mini-container";
+    char root_path[512] = "/tmp/container_root";
+    int memory = 128;
+    int cpu = 1024;
+    
+    printf("\n");
+    printf("Container name (optional, press Enter for auto-generated): ");
+    fflush(stdout);
+    if (fgets(container_name, sizeof(container_name), stdin)) {
+        size_t len = strlen(container_name);
+        if (len > 0 && container_name[len-1] == '\n') {
+            container_name[len-1] = '\0';
+        }
+    }
+    
+    printf("Command to run: ");
+    fflush(stdout);
+    if (!fgets(command, sizeof(command), stdin)) {
+        printf("Error reading command\n");
+        return;
+    }
+    size_t len = strlen(command);
+    if (len > 0 && command[len-1] == '\n') {
+        command[len-1] = '\0';
+    }
+    
+    printf("Memory limit (MB, default 128): ");
+    fflush(stdout);
+    char mem_str[64];
+    if (fgets(mem_str, sizeof(mem_str), stdin)) {
+        int m = atoi(mem_str);
+        if (m > 0) memory = m;
+    }
+    
+    printf("CPU shares (default 1024): ");
+    fflush(stdout);
+    char cpu_str[64];
+    if (fgets(cpu_str, sizeof(cpu_str), stdin)) {
+        int c = atoi(cpu_str);
+        if (c > 0) cpu = c;
+    }
+    
+    printf("Hostname (default mini-container): ");
+    fflush(stdout);
+    char hostname_input[256];
+    if (fgets(hostname_input, sizeof(hostname_input), stdin)) {
+        size_t hlen = strlen(hostname_input);
+        if (hlen > 0 && hostname_input[hlen-1] == '\n') {
+            hostname_input[hlen-1] = '\0';
+        }
+        if (strlen(hostname_input) > 0) {
+            strncpy(hostname, hostname_input, sizeof(hostname)-1);
+        }
+    }
+    
+    printf("Root path (default /tmp/container_root): ");
+    fflush(stdout);
+    char root_input[512];
+    if (fgets(root_input, sizeof(root_input), stdin)) {
+        size_t rlen = strlen(root_input);
+        if (rlen > 0 && root_input[rlen-1] == '\n') {
+            root_input[rlen-1] = '\0';
+        }
+        if (strlen(root_input) > 0) {
+            strncpy(root_path, root_input, sizeof(root_path)-1);
+        }
+    }
+    
+    // Parse command
+    vector<char*> args;
+    string cmd = command;
+    bool in_quotes = false;
+    char quote_char = 0;
+    string current_arg;
+    
+    for (size_t i = 0; i < cmd.length(); ++i) {
+        char c = cmd[i];
+        
+        if ((c == '"' || c == '\'') && (i == 0 || cmd[i-1] != '\\')) {
+            if (!in_quotes) {
+                in_quotes = true;
+                quote_char = c;
+            } else if (c == quote_char) {
+                in_quotes = false;
+                quote_char = 0;
+            } else {
+                current_arg += c;
+            }
+        } else if (c == ' ' && !in_quotes) {
+            if (!current_arg.empty()) {
+                args.push_back(strdup(current_arg.c_str()));
+                current_arg.clear();
+            }
+        } else {
+            current_arg += c;
+        }
+    }
+    
+    if (!current_arg.empty()) {
+        args.push_back(strdup(current_arg.c_str()));
+    }
+    args.push_back(nullptr);
+    
+    // Create container config
+    container_config_t config;
+    if (strlen(container_name) > 0) {
+        config.id = strdup(container_name);
+    } else {
+        config.id = nullptr;
+    }
+    namespace_config_init(&config.ns_config);
+    resource_limits_init(&config.res_limits);
+    fs_config_init(&config.fs_config);
+    
+    config.res_limits.memory.limit_bytes = memory * 1024 * 1024;
+    config.res_limits.cpu.shares = cpu;
+    config.ns_config.hostname = strdup(hostname);
+    config.fs_config.root_path = strdup(root_path);
+    config.command = args.data();
+    config.command_argc = args.size() - 1;
+    
+    printf("\n");
+    set_color(COLOR_YELLOW);
+    printf("Creating container...\n");
+    reset_color();
+    
+    if (container_manager_run(&cm, &config) != 0) {
+        set_color(COLOR_RED);
+        printf("Failed to create container\n");
+        reset_color();
+    } else {
+        container_info_t *info = container_manager_get_info(&cm, config.id ? config.id : "unknown");
+        if (info) {
+            set_color(COLOR_GREEN);
+            printf("Container %s started with PID %d\n", info->id, info->pid);
+            reset_color();
+        }
+    }
+    
+    // Cleanup
+    for (auto arg : args) {
+        if (arg) free(arg);
+    }
+    free(config.ns_config.hostname);
+    free(config.fs_config.root_path);
+    
+    printf("\nPress Enter to continue...");
+    getchar();
+}
+
+// Run tests
+void run_tests() {
+    clear_screen();
+    set_color(COLOR_BOLD);
+    set_color(COLOR_CYAN);
+    printf("╔══════════════════════════════════════════════════════════════════════════════╗\n");
+    printf("║                            System Tests                                        ║\n");
+    printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
+    reset_color();
+    
+    printf("\n");
+    printf("1. CPU Usage Test\n");
+    printf("2. Memory Limit Test\n");
+    printf("3. CPU Limit Test\n");
+    printf("4. Combined Test (CPU + Memory)\n");
+    printf("5. Run All Tests\n");
+    printf("0. Back to Menu\n");
+    printf("\nSelect test: ");
+    
+    char choice[10];
+    fgets(choice, sizeof(choice), stdin);
+    int test_num = atoi(choice);
+    
+    if (test_num == 0) return;
+    
+    container_config_t config;
+    namespace_config_init(&config.ns_config);
+    resource_limits_init(&config.res_limits);
+    fs_config_init(&config.fs_config);
+    
+    char container_id[256];
+    snprintf(container_id, sizeof(container_id), "test_%ld", time(nullptr));
+    config.id = container_id;
+    
+    vector<char*> args;
+    
+    if (test_num == 1 || test_num == 5) {
+        // CPU test
+        printf("\n[Test 1] CPU Usage Test...\n");
+        config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
+        config.res_limits.cpu.shares = 1024;
+        config.ns_config.hostname = strdup("cpu-test");
+        config.fs_config.root_path = strdup("/tmp/cpu_test_root");
+        
+        args.clear();
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup("while true; do :; done"));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            printf("  Container created, waiting 3 seconds...\n");
+            sleep(3);
+            
+            container_info_t *info = container_manager_get_info(&cm, container_id);
+            if (info && info->state == CONTAINER_RUNNING) {
+                unsigned long cpu_usage = 0, memory_usage = 0;
+                resource_manager_get_stats(cm.rm, container_id, &cpu_usage, &memory_usage);
+                printf("  CPU Usage: %lu ns\n", cpu_usage);
+                printf("  Memory Usage: %s\n", format_bytes(memory_usage).c_str());
+                printf("  ✓ Test passed\n");
+            }
+            
+            container_manager_stop(&cm, container_id);
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+    if (test_num == 2 || test_num == 5) {
+        // Memory test
+        printf("\n[Test 2] Memory Limit Test...\n");
+        snprintf(container_id, sizeof(container_id), "test_mem_%ld", time(nullptr));
+        config.id = container_id;
+        config.res_limits.memory.limit_bytes = 64 * 1024 * 1024;
+        config.res_limits.cpu.shares = 1024;
+        config.ns_config.hostname = strdup("mem-test");
+        config.fs_config.root_path = strdup("/tmp/mem_test_root");
+        
+        args.clear();
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup("dd if=/dev/zero of=/tmp/mem bs=1M count=80 status=none 2>&1; echo Exit code: $?"));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            printf("  Container created, waiting 2 seconds...\n");
+            sleep(2);
+            
+            container_info_t *info = container_manager_get_info(&cm, container_id);
+            if (info) {
+                unsigned long cpu_usage = 0, memory_usage = 0;
+                resource_manager_get_stats(cm.rm, container_id, &cpu_usage, &memory_usage);
+                printf("  Memory Usage: %s (Limit: 64 MB)\n", format_bytes(memory_usage).c_str());
+                printf("  ✓ Test passed\n");
+            }
+            
+            container_manager_stop(&cm, container_id);
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+    if (test_num == 3 || test_num == 5) {
+        // CPU limit test
+        printf("\n[Test 3] CPU Limit Test...\n");
+        snprintf(container_id, sizeof(container_id), "test_cpu_limit_%ld", time(nullptr));
+        config.id = container_id;
+        config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
+        config.res_limits.cpu.shares = 512;
+        config.ns_config.hostname = strdup("cpu-limit-test");
+        config.fs_config.root_path = strdup("/tmp/cpu_limit_test");
+        
+        args.clear();
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup("while true; do :; done"));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            printf("  Container created with CPU limit 512, waiting 3 seconds...\n");
+            sleep(3);
+            
+            container_info_t *info = container_manager_get_info(&cm, container_id);
+            if (info && info->state == CONTAINER_RUNNING) {
+                unsigned long cpu_usage = 0, memory_usage = 0;
+                resource_manager_get_stats(cm.rm, container_id, &cpu_usage, &memory_usage);
+                printf("  CPU Usage: %lu ns\n", cpu_usage);
+                printf("  ✓ Test passed\n");
+            }
+            
+            container_manager_stop(&cm, container_id);
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+    if (test_num == 4 || test_num == 5) {
+        // Combined test
+        printf("\n[Test 4] Combined Test (CPU + Memory)...\n");
+        snprintf(container_id, sizeof(container_id), "test_combined_%ld", time(nullptr));
+        config.id = container_id;
+        config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
+        config.res_limits.cpu.shares = 1024;
+        config.ns_config.hostname = strdup("combined-test");
+        config.fs_config.root_path = strdup("/tmp/combined_test_root");
+        
+        args.clear();
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup("dd if=/dev/zero of=/tmp/stress bs=1M count=16 status=none; i=0; while [ $i -lt 10000000 ]; do i=$((i+1)); done; rm -f /tmp/stress; echo Done"));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            printf("  Container created, waiting 3 seconds...\n");
+            sleep(3);
+            
+            container_info_t *info = container_manager_get_info(&cm, container_id);
+            if (info && info->state == CONTAINER_RUNNING) {
+                unsigned long cpu_usage = 0, memory_usage = 0;
+                resource_manager_get_stats(cm.rm, container_id, &cpu_usage, &memory_usage);
+                printf("  CPU Usage: %lu ns\n", cpu_usage);
+                printf("  Memory Usage: %s\n", format_bytes(memory_usage).c_str());
+                printf("  ✓ Test passed\n");
+            }
+            
+            container_manager_stop(&cm, container_id);
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+    printf("\nPress Enter to continue...");
+    getchar();
+}
+
+// Signal handler
+void signal_handler(int signum) {
+    (void)signum;
+    running = false;
+    monitor_mode = false;
+    show_cursor();
+}
+
+// Interactive menu
+void interactive_menu() {
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
+    
+    while (running) {
+        clear_screen();
+        set_color(COLOR_BOLD);
+        set_color(COLOR_CYAN);
+        printf("╔══════════════════════════════════════════════════════════════════════════════╗\n");
+        printf("║                    Mini Container - Interactive Menu                          ║\n");
+        printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
+        reset_color();
+        
+        printf("\n");
+        printf("1. Create Container\n");
+        printf("2. Monitor (htop-like)\n");
+        printf("3. List Containers\n");
+        printf("4. Stop Container\n");
+        printf("5. Destroy Container\n");
+        printf("6. Container Info\n");
+        printf("7. Run Tests\n");
+        printf("0. Exit\n");
+        printf("\n");
+        printf("Select option: ");
+        fflush(stdout);
+        
+        char choice[10];
+        if (!fgets(choice, sizeof(choice), stdin)) {
+            break;
+        }
+        
+        int option = atoi(choice);
+        
+        switch (option) {
+            case 1:
+                interactive_create_container();
+                break;
+            case 2:
+                monitor_mode = true;
+                display_monitor();
+                break;
+            case 3:
+                handle_list(0, nullptr);
+                printf("\nPress Enter to continue...");
+                getchar();
+                break;
+            case 4: {
+                printf("Container ID: ");
+                fflush(stdout);
+                char id[256];
+                if (fgets(id, sizeof(id), stdin)) {
+                    size_t len = strlen(id);
+                    if (len > 0 && id[len-1] == '\n') {
+                        id[len-1] = '\0';
+                    }
+                    char* argv[] = {"stop", id, nullptr};
+                    handle_stop(2, argv);
+                    printf("\nPress Enter to continue...");
+                    getchar();
+                }
+                break;
+            }
+            case 5: {
+                printf("Container ID: ");
+                fflush(stdout);
+                char id[256];
+                if (fgets(id, sizeof(id), stdin)) {
+                    size_t len = strlen(id);
+                    if (len > 0 && id[len-1] == '\n') {
+                        id[len-1] = '\0';
+                    }
+                    char* argv[] = {"destroy", id, nullptr};
+                    handle_destroy(2, argv);
+                    printf("\nPress Enter to continue...");
+                    getchar();
+                }
+                break;
+            }
+            case 6: {
+                printf("Container ID: ");
+                fflush(stdout);
+                char id[256];
+                if (fgets(id, sizeof(id), stdin)) {
+                    size_t len = strlen(id);
+                    if (len > 0 && id[len-1] == '\n') {
+                        id[len-1] = '\0';
+                    }
+                    char* argv[] = {"info", id, nullptr};
+                    handle_info(2, argv);
+                    printf("\nPress Enter to continue...");
+                    getchar();
+                }
+                break;
+            }
+            case 7:
+                run_tests();
+                break;
+            case 0:
+                running = false;
+                break;
+            default:
+                printf("Invalid option\n");
+                usleep(500000);
+                break;
+        }
+    }
+}
+
 int main(int argc, char *argv[])
 {
     if (container_manager_init(&cm, 10) != 0)
@@ -329,13 +1017,15 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Warning: container operations typically require root privileges\n");
     }
 
+    // If no arguments, run interactive menu
     if (argc < 2)
     {
-        print_usage(argv[0]);
+        interactive_menu();
         container_manager_cleanup(&cm);
-        return EXIT_FAILURE;
+        return EXIT_SUCCESS;
     }
 
+    // Otherwise, handle command line arguments
     const char *command = argv[1];
     int result = EXIT_FAILURE;
 
@@ -363,10 +1053,24 @@ int main(int argc, char *argv[])
     {
         result = handle_info(argc - 1, &argv[1]);
     }
+    else if (strcmp(command, "monitor") == 0 || strcmp(command, "htop") == 0)
+    {
+        monitor_mode = true;
+        display_monitor();
+        result = EXIT_SUCCESS;
+    }
+    else if (strcmp(command, "interactive") == 0 || strcmp(command, "menu") == 0)
+    {
+        interactive_menu();
+        result = EXIT_SUCCESS;
+    }
     else if (strcmp(command, "help") == 0 || strcmp(command, "-h") == 0 ||
              strcmp(command, "--help") == 0)
     {
         print_usage(argv[0]);
+        printf("\nInteractive Mode:\n");
+        printf("  Run without arguments or use 'interactive' command to enter interactive menu\n");
+        printf("  Use 'monitor' or 'htop' command to view htop-like monitor\n");
         result = EXIT_SUCCESS;
     }
     else

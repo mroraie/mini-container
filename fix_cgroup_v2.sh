@@ -97,3 +97,4 @@ echo "4. اگر هنوز مشکل دارید، بررسی کنید:"
 echo "   ls -la /sys/fs/cgroup/"
 echo "   cat /sys/fs/cgroup/cgroup.controllers"
 
+
