@@ -188,15 +188,32 @@ static int handle_run(int argc, char *argv[])
         {
             // Don't wait, just return
             printf("Container running in background. Use 'stop %s' to stop it.\n", info->id);
+            printf("Web server is running on http://localhost:808\n");
+            printf("Press Ctrl+C to stop web server and exit\n");
+            
+            // Keep running to maintain web server
+            while (running) {
+                sleep(1);
+            }
         }
         else
         {
             // Wait for container to finish
             if (info->pid > 0)
             {
+                printf("Container running. Web server available at http://localhost:808\n");
+                printf("Press Ctrl+C to stop container and exit\n");
+                
+                // Wait for container, but keep web server running
                 int status;
                 waitpid(info->pid, &status, 0);
                 printf("Container %s exited with status %d\n", info->id, WEXITSTATUS(status));
+                printf("Web server still running. Press Ctrl+C to exit\n");
+                
+                // Keep web server running until Ctrl+C
+                while (running) {
+                    sleep(1);
+                }
             }
         }
     }
@@ -1005,7 +1022,12 @@ void signal_handler(int signum) {
     // Stop web server
     if (web_server) {
         web_server->stop();
+        delete web_server;
+        web_server = nullptr;
     }
+    
+    // Cleanup container manager
+    container_manager_cleanup(&cm);
 }
 
 // Interactive menu with live monitor
@@ -1328,13 +1350,17 @@ int main(int argc, char *argv[])
         result = EXIT_FAILURE;
     }
 
-    // Stop web server before cleanup
-    if (web_server) {
-        web_server->stop();
-        delete web_server;
-        web_server = nullptr;
+    // Stop web server before cleanup (only for commands that exit immediately)
+    // For 'run' command, web server is kept running until Ctrl+C (handled in signal handler)
+    if (strcmp(command, "run") != 0) {
+        if (web_server) {
+            web_server->stop();
+            delete web_server;
+            web_server = nullptr;
+        }
+        container_manager_cleanup(&cm);
     }
-
-    container_manager_cleanup(&cm);
+    // For 'run' command, cleanup is done in signal handler when Ctrl+C is pressed
+    
     return result;
 }
