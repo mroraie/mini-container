@@ -1117,7 +1117,8 @@ void interactive_menu() {
                             if (len > 0 && id[len-1] == '\n') {
                                 id[len-1] = '\0';
                             }
-                            char* argv[] = {"stop", id, nullptr};
+                            char cmd_stop[] = "stop";
+                            char* argv[] = {cmd_stop, id, nullptr};
                             handle_stop(2, argv);
                             printf("\nPress Enter to continue...");
                             getchar();
@@ -1134,7 +1135,8 @@ void interactive_menu() {
                             if (len > 0 && id[len-1] == '\n') {
                                 id[len-1] = '\0';
                             }
-                            char* argv[] = {"destroy", id, nullptr};
+                            char cmd_destroy[] = "destroy";
+                            char* argv[] = {cmd_destroy, id, nullptr};
                             handle_destroy(2, argv);
                             printf("\nPress Enter to continue...");
                             getchar();
@@ -1151,7 +1153,8 @@ void interactive_menu() {
                             if (len > 0 && id[len-1] == '\n') {
                                 id[len-1] = '\0';
                             }
-                            char* argv[] = {"info", id, nullptr};
+                            char cmd_info[] = "info";
+                            char* argv[] = {cmd_info, id, nullptr};
                             handle_info(2, argv);
                             printf("\nPress Enter to continue...");
                             getchar();
@@ -1185,81 +1188,6 @@ void interactive_menu() {
     // Restore terminal settings
     tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
     show_cursor();
-}
-        
-        switch (option) {
-            case 1:
-                interactive_create_container();
-                break;
-            case 2:
-                monitor_mode = true;
-                display_monitor();
-                break;
-            case 3:
-                handle_list(0, nullptr);
-                printf("\nPress Enter to continue...");
-                getchar();
-                break;
-            case 4: {
-                printf("Container ID: ");
-                fflush(stdout);
-                char id[256];
-                if (fgets(id, sizeof(id), stdin)) {
-                    size_t len = strlen(id);
-                    if (len > 0 && id[len-1] == '\n') {
-                        id[len-1] = '\0';
-                    }
-                    char* argv[] = {"stop", id, nullptr};
-                    handle_stop(2, argv);
-                    printf("\nPress Enter to continue...");
-                    getchar();
-                }
-                break;
-            }
-            case 5: {
-                printf("Container ID: ");
-                fflush(stdout);
-                char id[256];
-                if (fgets(id, sizeof(id), stdin)) {
-                    size_t len = strlen(id);
-                    if (len > 0 && id[len-1] == '\n') {
-                        id[len-1] = '\0';
-                    }
-                    char* argv[] = {"destroy", id, nullptr};
-                    handle_destroy(2, argv);
-                    printf("\nPress Enter to continue...");
-                    getchar();
-                }
-                break;
-            }
-            case 6: {
-                printf("Container ID: ");
-                fflush(stdout);
-                char id[256];
-                if (fgets(id, sizeof(id), stdin)) {
-                    size_t len = strlen(id);
-                    if (len > 0 && id[len-1] == '\n') {
-                        id[len-1] = '\0';
-                    }
-                    char* argv[] = {"info", id, nullptr};
-                    handle_info(2, argv);
-                    printf("\nPress Enter to continue...");
-                    getchar();
-                }
-                break;
-            }
-            case 7:
-                run_tests();
-                break;
-            case 0:
-                running = false;
-                break;
-            default:
-                printf("Invalid option\n");
-                usleep(500000);
-                break;
-        }
-    }
 }
 
 int main(int argc, char *argv[])
