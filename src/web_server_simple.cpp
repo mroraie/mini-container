@@ -276,200 +276,52 @@ std::string SimpleWebServer::getSystemInfoJSON() {
 std::string SimpleWebServer::generateHTML() {
         return R"HTML(
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini Container Monitor - Live</title>
+    <title>Mini Container Monitor</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Courier New', monospace;
-            background: #000000;
-            color: #00ff00;
-            direction: ltr;
-            padding: 10px;
-            font-size: 12px;
-        }
-
-        .header {
-            border-bottom: 1px solid #00ff00;
-            padding: 10px 0;
-            margin-bottom: 10px;
-        }
-
-        .header h1 {
-            font-size: 16px;
-            font-weight: normal;
-            color: #00ff00;
-        }
-
-        .stats-bar {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 10px;
-            padding: 5px 0;
-            border-bottom: 1px solid #333333;
-        }
-
-        .stat-item {
-            display: flex;
-            gap: 5px;
-        }
-
-        .stat-label {
-            color: #888888;
-        }
-
-        .stat-value {
-            color: #00ff00;
-        }
-
-        .table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .table thead {
-            border-bottom: 1px solid #00ff00;
-        }
-
-        .table th {
-            text-align: left;
-            padding: 5px 10px;
-            font-weight: normal;
-            color: #00ff00;
-            border-bottom: 1px solid #333333;
-        }
-
-        .table td {
-            padding: 3px 10px;
-            border-bottom: 1px solid #222222;
-        }
-
-        .table tr:hover {
-            background: #111111;
-        }
-
-        .status-running {
-            color: #00ff00;
-        }
-
-        .status-stopped {
-            color: #ff0000;
-        }
-
-        .status-created {
-            color: #ffff00;
-        }
-
-        .cpu-bar {
-            display: inline-block;
-            width: 60px;
-            height: 10px;
-            background: #222222;
-            border: 1px solid #00ff00;
-            position: relative;
-            vertical-align: middle;
-        }
-
-        .cpu-bar-fill {
-            height: 100%;
-            background: #00ff00;
-            transition: width 0.3s;
-        }
-
-        .memory-bar {
-            display: inline-block;
-            width: 60px;
-            height: 10px;
-            background: #222222;
-            border: 1px solid #00ff00;
-            position: relative;
-            vertical-align: middle;
-        }
-
-        .memory-bar-fill {
-            height: 100%;
-            background: #00ff00;
-            transition: width 0.3s;
-        }
-
-        .footer {
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid #333333;
-            color: #888888;
-            font-size: 10px;
-            text-align: center;
-        }
-
-        .no-containers {
-            text-align: center;
-            padding: 20px;
-            color: #888888;
-        }
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #333; }
+        .stats { margin: 20px 0; padding: 10px; background: #f5f5f5; }
+        .stats span { margin-right: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #4CAF50; color: white; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+        .running { color: green; }
+        .stopped { color: red; }
+        .created { color: orange; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Container Monitor - Mini Container Monitor (Live)</h1>
+    <h1>Mini Container Monitor</h1>
+    
+    <div class="stats">
+        <span>Active: <strong id="running-count">0</strong></span>
+        <span>Total: <strong id="total-count">0</strong></span>
+        <span>Total CPU: <strong id="total-cpu">0.0%</strong></span>
+        <span>Total Memory: <strong id="total-memory">--</strong></span>
+        <span>Available Memory: <strong id="available-memory">--</strong></span>
+        <span>Last Update: <strong id="update-time">--:--:--</strong></span>
     </div>
 
-    <div class="stats-bar">
-        <div class="stat-item">
-            <span class="stat-label">Active Containers:</span>
-            <span class="stat-value" id="running-count">0</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-label">Total Containers:</span>
-            <span class="stat-value" id="total-count">0</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-label">Total CPU Usage:</span>
-            <span class="stat-value" id="total-cpu">0.0%</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-label">Total Memory:</span>
-            <span class="stat-value" id="total-memory">--</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-label">Available Memory:</span>
-            <span class="stat-value" id="available-memory">--</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-label">Last Update:</span>
-            <span class="stat-value" id="update-time">--:--:--</span>
-        </div>
-    </div>
-
-    <table class="table">
+    <table>
         <thead>
             <tr>
-                <th style="width: 20%;">ID</th>
-                <th style="width: 10%;">PID</th>
-                <th style="width: 10%;">Status</th>
-                <th style="width: 15%;">CPU</th>
-                <th style="width: 15%;">Memory</th>
-                <th style="width: 15%;">Runtime</th>
-                <th style="width: 15%;">Created</th>
+                <th>ID</th>
+                <th>PID</th>
+                <th>Status</th>
+                <th>CPU</th>
+                <th>Memory</th>
+                <th>Runtime</th>
+                <th>Created</th>
             </tr>
         </thead>
         <tbody id="container-table-body">
-            <tr>
-                <td colspan="7" class="no-containers">Loading...</td>
-            </tr>
+            <tr><td colspan="7">Loading...</td></tr>
         </tbody>
     </table>
-
-    <div class="footer">
-        Auto-update every 1 second | Press F5 for manual update
-    </div>
 
     <script>
         const prevCpuUsage = {};
@@ -618,9 +470,6 @@ std::string SimpleWebServer::generateHTML() {
                             }
                             if (memoryUsage !== undefined && memoryUsage !== null && !isNaN(memoryUsage) && memoryUsage >= 0) {
                                 memoryDisplay = formatBytes(memoryUsage);
-                                const limit = 128 * 1024 * 1024;
-                                memoryPercent = (memoryUsage / limit) * 100;
-                                memoryPercent = Math.min(100, Math.max(0, memoryPercent));
                             } else {
                                 memoryDisplay = '0 B';
                             }
@@ -629,20 +478,19 @@ std::string SimpleWebServer::generateHTML() {
                         const runtime = container.started_at ? 
                             Math.floor(Date.now() / 1000) - container.started_at : 0;
 
-                        const cpuBar = cpuPercent > 0 ? 
-                            `<div class="cpu-bar"><div class="cpu-bar-fill" style="width: ${Math.min(100, cpuPercent)}%"></div></div> ${cpuDisplay}` :
-                            cpuDisplay;
-                        
-                        const memBar = memoryPercent > 0 ?
-                            `<div class="memory-bar"><div class="memory-bar-fill" style="width: ${Math.min(100, memoryPercent)}%"></div></div> ${memoryDisplay}` :
-                            memoryDisplay;
+                        const statusClassMap = {
+                            'running': 'running',
+                            'stopped': 'stopped',
+                            'created': 'created'
+                        };
+                        const statusClass = statusClassMap[container.state.toLowerCase()] || '';
 
                         row.innerHTML = `
                             <td>${container.id}</td>
                             <td>${container.pid || '-----'}</td>
                             <td class="${statusClass}">${statusText}</td>
-                            <td>${cpuBar}</td>
-                            <td>${memBar}</td>
+                            <td>${cpuDisplay}</td>
+                            <td>${memoryDisplay}</td>
                             <td>${formatTime(runtime)}</td>
                             <td>${formatDate(container.created_at)}</td>
                         `;
@@ -653,20 +501,12 @@ std::string SimpleWebServer::generateHTML() {
                 .catch(error => {
                     console.error('Error:', error);
                     document.getElementById('container-table-body').innerHTML = 
-                        '<tr><td colspan="7" class="no-containers" style="color: #ff0000;">Error loading data</td></tr>';
+                        '<tr><td colspan="7">Error loading data</td></tr>';
                 });
         }
 
         updateMonitor();
-
         setInterval(updateMonitor, 5000);
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'F5') {
-                e.preventDefault();
-                updateMonitor();
-            }
-        });
     </script>
 </body>
 </html>
