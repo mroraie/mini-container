@@ -1012,6 +1012,191 @@ void run_tests() {
     getchar();
 }
 
+// Initialize 5 containers with different resource consumption patterns
+void init_containers() {
+    printf("Initializing 5 containers with different resource patterns...\n");
+    
+    time_t base_time = time(nullptr);
+    int counter = 0;
+    
+    // Container 1: CPU only
+    {
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+        snprintf(container_id, sizeof(container_id), "cpu_only_%ld_%d", base_time, counter++);
+        config.id = strdup(container_id);
+        config.res_limits.memory.limit_bytes = 50 * 1024 * 1024;  // 50 MB
+        config.res_limits.cpu.shares = 102;  // 1/10 of default 1024
+        config.ns_config.hostname = strdup("cpu-only");
+        config.fs_config.root_path = strdup("/");
+        
+        vector<char*> args;
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup("yes > /dev/null & sleep 60"));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            printf("  ✓ Container 1 (CPU only) started: %s\n", container_id);
+        } else {
+            printf("  ✗ Failed to start Container 1\n");
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.id);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+    // Container 2: RAM only
+    {
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+        snprintf(container_id, sizeof(container_id), "ram_only_%ld_%d", base_time, counter++);
+        config.id = strdup(container_id);
+        config.res_limits.memory.limit_bytes = 120 * 1024 * 1024;  // 120 MB
+        config.res_limits.cpu.shares = 10;  // Very low CPU
+        config.ns_config.hostname = strdup("ram-only");
+        config.fs_config.root_path = strdup("/");
+        
+        vector<char*> args;
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup("python3 -c 'a = bytearray(100*1024*1024); import time; time.sleep(60)'"));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            printf("  ✓ Container 2 (RAM only) started: %s\n", container_id);
+        } else {
+            printf("  ✗ Failed to start Container 2\n");
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.id);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+    // Container 3: CPU + RAM both
+    {
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+        snprintf(container_id, sizeof(container_id), "cpu_ram_%ld_%d", base_time, counter++);
+        config.id = strdup(container_id);
+        config.res_limits.memory.limit_bytes = 100 * 1024 * 1024;  // 100 MB
+        config.res_limits.cpu.shares = 102;  // 1/10 of default
+        config.ns_config.hostname = strdup("cpu-ram");
+        config.fs_config.root_path = strdup("/");
+        
+        vector<char*> args;
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup("yes > /dev/null & python3 -c 'a = bytearray(90*1024*1024); import time; time.sleep(60)'"));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            printf("  ✓ Container 3 (CPU + RAM) started: %s\n", container_id);
+        } else {
+            printf("  ✗ Failed to start Container 3\n");
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.id);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+    // Container 4: Idle (baseline, no CPU/RAM stress)
+    {
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+        snprintf(container_id, sizeof(container_id), "idle_%ld_%d", base_time, counter++);
+        config.id = strdup(container_id);
+        config.res_limits.memory.limit_bytes = 50 * 1024 * 1024;  // 50 MB
+        config.res_limits.cpu.shares = 10;  // Very low CPU
+        config.ns_config.hostname = strdup("idle");
+        config.fs_config.root_path = strdup("/");
+        
+        vector<char*> args;
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup("sleep 60"));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            printf("  ✓ Container 4 (Idle) started: %s\n", container_id);
+        } else {
+            printf("  ✗ Failed to start Container 4\n");
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.id);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+    // Container 5: CPU heavy, low RAM
+    {
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+        snprintf(container_id, sizeof(container_id), "cpu_heavy_%ld_%d", base_time, counter++);
+        config.id = strdup(container_id);
+        config.res_limits.memory.limit_bytes = 50 * 1024 * 1024;  // 50 MB
+        config.res_limits.cpu.shares = 204;  // 2/10 of default (higher than others)
+        config.ns_config.hostname = strdup("cpu-heavy");
+        config.fs_config.root_path = strdup("/");
+        
+        vector<char*> args;
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup("yes > /dev/null & sleep 60"));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            printf("  ✓ Container 5 (CPU heavy, low RAM) started: %s\n", container_id);
+        } else {
+            printf("  ✗ Failed to start Container 5\n");
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.id);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+    printf("Container initialization complete!\n\n");
+}
+
 // Signal handler
 void signal_handler(int signum) {
     (void)signum;
@@ -1202,6 +1387,9 @@ int main(int argc, char *argv[])
     {
         fprintf(stderr, "Warning: container operations typically require root privileges\n");
     }
+
+    // Initialize 5 containers with different resource patterns
+    init_containers();
 
     // Start web server automatically
     web_server = new SimpleWebServer(&cm, 808);
