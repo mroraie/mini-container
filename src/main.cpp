@@ -413,9 +413,18 @@ void display_compact_monitor() {
     container_info_t **containers = container_manager_list(&cm, &count);
     
     int running_count = 0;
+    double total_cpu_percent = 0.0;
+    unsigned long total_memory_bytes = 0;
+    
     for (int i = 0; i < count; i++) {
         if (containers[i]->state == CONTAINER_RUNNING) {
             running_count++;
+            unsigned long cpu_usage = 0, memory_usage = 0;
+            resource_manager_get_stats(cm.rm, containers[i]->id, &cpu_usage, &memory_usage);
+            total_memory_bytes += memory_usage;
+            if (containers[i]->started_at > 0) {
+                total_cpu_percent += calculate_cpu_percent(cpu_usage, containers[i]->started_at);
+            }
         }
     }
     
@@ -430,6 +439,14 @@ void display_compact_monitor() {
     printf("Running: %d  ", running_count);
     reset_color();
     printf("Total: %d  ", count);
+    
+    set_color(COLOR_YELLOW);
+    printf("Total CPU: %.1f%%  ", total_cpu_percent);
+    reset_color();
+    
+    set_color(COLOR_CYAN);
+    printf("Total RAM: %s  ", format_bytes(total_memory_bytes).c_str());
+    reset_color();
     
     time_t now = time(nullptr);
     char time_str[64];
@@ -987,14 +1004,15 @@ void run_tests() {
     getchar();
 }
 
-// Initialize 5 containers with different resource consumption patterns
+// Initialize 10 containers with different resource consumption patterns
 void init_containers() {
-    // printf("Initializing 5 containers with different resource patterns...\n");
+    // printf("Initializing 10 containers with different resource patterns...\n");
     
     time_t base_time = time(nullptr);
     int counter = 0;
+    const int runtime_seconds = 600;  // 10 minutes
     
-    // Container 1: CPU only
+    // Container 1: CPU intensive - multiple CPU-bound processes
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
@@ -1002,25 +1020,23 @@ void init_containers() {
         fs_config_init(&config.fs_config);
         
         char container_id[64];
-        snprintf(container_id, sizeof(container_id), "cpu_only_%ld_%d", base_time, counter++);
+        snprintf(container_id, sizeof(container_id), "cpu_intensive_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = 50 * 1024 * 1024;  // 50 MB
-        config.res_limits.cpu.shares = 102;  // 1/10 of default 1024
-        config.ns_config.hostname = strdup("cpu-only");
+        config.res_limits.memory.limit_bytes = 80 * 1024 * 1024;  // 80 MB limit
+        config.res_limits.cpu.shares = 256;  // Limited CPU shares
+        config.ns_config.hostname = strdup("cpu-intensive");
         config.fs_config.root_path = strdup("/");
         
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
-        args.push_back(strdup("yes > /dev/null & sleep 60"));
+        args.push_back(strdup("for i in 1 2 3 4; do yes > /dev/null & done; sleep 600"));
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
         
         if (container_manager_run(&cm, &config) == 0) {
-            // printf("  ✓ Container 1 (CPU only) started: %s\n", container_id);
-        } else {
-            // printf("  ✗ Failed to start Container 1\n");
+            // printf("  ✓ Container 1 (CPU intensive) started: %s\n", container_id);
         }
         
         for (auto arg : args) if (arg) free(arg);
@@ -1029,7 +1045,7 @@ void init_containers() {
         free(config.fs_config.root_path);
     }
     
-    // Container 2: RAM only
+    // Container 2: RAM intensive - large memory allocation
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
@@ -1037,25 +1053,23 @@ void init_containers() {
         fs_config_init(&config.fs_config);
         
         char container_id[64];
-        snprintf(container_id, sizeof(container_id), "ram_only_%ld_%d", base_time, counter++);
+        snprintf(container_id, sizeof(container_id), "ram_intensive_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = 120 * 1024 * 1024;  // 120 MB
-        config.res_limits.cpu.shares = 10;  // Very low CPU
-        config.ns_config.hostname = strdup("ram-only");
+        config.res_limits.memory.limit_bytes = 200 * 1024 * 1024;  // 200 MB limit
+        config.res_limits.cpu.shares = 128;  // Low CPU
+        config.ns_config.hostname = strdup("ram-intensive");
         config.fs_config.root_path = strdup("/");
         
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
-        args.push_back(strdup("python3 -c 'a = bytearray(100*1024*1024); import time; time.sleep(60)'"));
+        args.push_back(strdup("python3 -c 'a = [bytearray(50*1024*1024) for _ in range(3)]; import time; time.sleep(600)'"));
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
         
         if (container_manager_run(&cm, &config) == 0) {
-            // printf("  ✓ Container 2 (RAM only) started: %s\n", container_id);
-        } else {
-            // printf("  ✗ Failed to start Container 2\n");
+            // printf("  ✓ Container 2 (RAM intensive) started: %s\n", container_id);
         }
         
         for (auto arg : args) if (arg) free(arg);
@@ -1064,7 +1078,7 @@ void init_containers() {
         free(config.fs_config.root_path);
     }
     
-    // Container 3: CPU + RAM both
+    // Container 3: CPU + RAM both - heavy computation
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
@@ -1072,25 +1086,23 @@ void init_containers() {
         fs_config_init(&config.fs_config);
         
         char container_id[64];
-        snprintf(container_id, sizeof(container_id), "cpu_ram_%ld_%d", base_time, counter++);
+        snprintf(container_id, sizeof(container_id), "cpu_ram_heavy_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = 100 * 1024 * 1024;  // 100 MB
-        config.res_limits.cpu.shares = 102;  // 1/10 of default
-        config.ns_config.hostname = strdup("cpu-ram");
+        config.res_limits.memory.limit_bytes = 150 * 1024 * 1024;  // 150 MB limit
+        config.res_limits.cpu.shares = 256;  // Limited CPU
+        config.ns_config.hostname = strdup("cpu-ram-heavy");
         config.fs_config.root_path = strdup("/");
         
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
-        args.push_back(strdup("yes > /dev/null & python3 -c 'a = bytearray(90*1024*1024); import time; time.sleep(60)'"));
+        args.push_back(strdup("yes > /dev/null & python3 -c 'a = bytearray(120*1024*1024); import time; [i*i for i in range(10000000)]; time.sleep(600)'"));
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
         
         if (container_manager_run(&cm, &config) == 0) {
-            // printf("  ✓ Container 3 (CPU + RAM) started: %s\n", container_id);
-        } else {
-            // printf("  ✗ Failed to start Container 3\n");
+            // printf("  ✓ Container 3 (CPU + RAM heavy) started: %s\n", container_id);
         }
         
         for (auto arg : args) if (arg) free(arg);
@@ -1099,7 +1111,7 @@ void init_containers() {
         free(config.fs_config.root_path);
     }
     
-    // Container 4: Idle (baseline, no CPU/RAM stress)
+    // Container 4: CPU calculation intensive
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
@@ -1107,25 +1119,23 @@ void init_containers() {
         fs_config_init(&config.fs_config);
         
         char container_id[64];
-        snprintf(container_id, sizeof(container_id), "idle_%ld_%d", base_time, counter++);
+        snprintf(container_id, sizeof(container_id), "cpu_calc_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = 50 * 1024 * 1024;  // 50 MB
-        config.res_limits.cpu.shares = 10;  // Very low CPU
-        config.ns_config.hostname = strdup("idle");
+        config.res_limits.memory.limit_bytes = 100 * 1024 * 1024;  // 100 MB limit
+        config.res_limits.cpu.shares = 300;  // Medium CPU limit
+        config.ns_config.hostname = strdup("cpu-calc");
         config.fs_config.root_path = strdup("/");
         
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
-        args.push_back(strdup("sleep 60"));
+        args.push_back(strdup("python3 -c 'import time; start=time.time(); [sum(range(i)) for i in range(50000)]; time.sleep(600)'"));
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
         
         if (container_manager_run(&cm, &config) == 0) {
-            // printf("  ✓ Container 4 (Idle) started: %s\n", container_id);
-        } else {
-            // printf("  ✗ Failed to start Container 4\n");
+            // printf("  ✓ Container 4 (CPU calc) started: %s\n", container_id);
         }
         
         for (auto arg : args) if (arg) free(arg);
@@ -1134,7 +1144,7 @@ void init_containers() {
         free(config.fs_config.root_path);
     }
     
-    // Container 5: CPU heavy, low RAM
+    // Container 5: Memory stress test
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
@@ -1142,25 +1152,188 @@ void init_containers() {
         fs_config_init(&config.fs_config);
         
         char container_id[64];
-        snprintf(container_id, sizeof(container_id), "cpu_heavy_%ld_%d", base_time, counter++);
+        snprintf(container_id, sizeof(container_id), "mem_stress_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = 50 * 1024 * 1024;  // 50 MB
-        config.res_limits.cpu.shares = 204;  // 2/10 of default (higher than others)
-        config.ns_config.hostname = strdup("cpu-heavy");
+        config.res_limits.memory.limit_bytes = 180 * 1024 * 1024;  // 180 MB limit
+        config.res_limits.cpu.shares = 100;  // Low CPU
+        config.ns_config.hostname = strdup("mem-stress");
         config.fs_config.root_path = strdup("/");
         
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
-        args.push_back(strdup("yes > /dev/null & sleep 60"));
+        args.push_back(strdup("python3 -c 'import time; data = [bytearray(30*1024*1024) for _ in range(5)]; time.sleep(600)'"));
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
         
         if (container_manager_run(&cm, &config) == 0) {
-            // printf("  ✓ Container 5 (CPU heavy, low RAM) started: %s\n", container_id);
-        } else {
-            // printf("  ✗ Failed to start Container 5\n");
+            // printf("  ✓ Container 5 (Memory stress) started: %s\n", container_id);
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.id);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+    // Container 6: Mixed workload - CPU and I/O
+    {
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+        snprintf(container_id, sizeof(container_id), "mixed_workload_%ld_%d", base_time, counter++);
+        config.id = strdup(container_id);
+        config.res_limits.memory.limit_bytes = 120 * 1024 * 1024;  // 120 MB limit
+        config.res_limits.cpu.shares = 200;  // Medium CPU
+        config.ns_config.hostname = strdup("mixed-workload");
+        config.fs_config.root_path = strdup("/");
+        
+        vector<char*> args;
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup("yes > /dev/null & dd if=/dev/zero of=/tmp/test bs=1M count=50 status=none & sleep 600"));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            // printf("  ✓ Container 6 (Mixed workload) started: %s\n", container_id);
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.id);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+    // Container 7: High CPU, low memory
+    {
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+        snprintf(container_id, sizeof(container_id), "high_cpu_%ld_%d", base_time, counter++);
+        config.id = strdup(container_id);
+        config.res_limits.memory.limit_bytes = 60 * 1024 * 1024;  // 60 MB limit
+        config.res_limits.cpu.shares = 400;  // Higher CPU limit
+        config.ns_config.hostname = strdup("high-cpu");
+        config.fs_config.root_path = strdup("/");
+        
+        vector<char*> args;
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup("for i in 1 2 3; do yes > /dev/null & done; sleep 600"));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            // printf("  ✓ Container 7 (High CPU) started: %s\n", container_id);
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.id);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+    // Container 8: High memory, low CPU
+    {
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+        snprintf(container_id, sizeof(container_id), "high_mem_%ld_%d", base_time, counter++);
+        config.id = strdup(container_id);
+        config.res_limits.memory.limit_bytes = 250 * 1024 * 1024;  // 250 MB limit
+        config.res_limits.cpu.shares = 80;  // Very low CPU
+        config.ns_config.hostname = strdup("high-mem");
+        config.fs_config.root_path = strdup("/");
+        
+        vector<char*> args;
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup("python3 -c 'a = [bytearray(40*1024*1024) for _ in range(5)]; import time; time.sleep(600)'"));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            // printf("  ✓ Container 8 (High memory) started: %s\n", container_id);
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.id);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+    // Container 9: Balanced workload
+    {
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+        snprintf(container_id, sizeof(container_id), "balanced_%ld_%d", base_time, counter++);
+        config.id = strdup(container_id);
+        config.res_limits.memory.limit_bytes = 140 * 1024 * 1024;  // 140 MB limit
+        config.res_limits.cpu.shares = 250;  // Medium CPU
+        config.ns_config.hostname = strdup("balanced");
+        config.fs_config.root_path = strdup("/");
+        
+        vector<char*> args;
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup("yes > /dev/null & python3 -c 'a = bytearray(100*1024*1024); import time; time.sleep(600)'"));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            // printf("  ✓ Container 9 (Balanced) started: %s\n", container_id);
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.id);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+    // Container 10: Maximum stress - both CPU and RAM
+    {
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+        snprintf(container_id, sizeof(container_id), "max_stress_%ld_%d", base_time, counter++);
+        config.id = strdup(container_id);
+        config.res_limits.memory.limit_bytes = 220 * 1024 * 1024;  // 220 MB limit
+        config.res_limits.cpu.shares = 350;  // Higher CPU limit
+        config.ns_config.hostname = strdup("max-stress");
+        config.fs_config.root_path = strdup("/");
+        
+        vector<char*> args;
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup("for i in 1 2 3 4 5; do yes > /dev/null & done; python3 -c 'a = [bytearray(35*1024*1024) for _ in range(5)]; import time; [i**2 for i in range(2000000)]; time.sleep(600)'"));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            // printf("  ✓ Container 10 (Max stress) started: %s\n", container_id);
         }
         
         for (auto arg : args) if (arg) free(arg);
