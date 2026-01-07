@@ -19,6 +19,9 @@ private:
     std::string handleRequest(const std::string& request);
     std::string generateHTML();
     std::string getContainerListJSON();
+    std::string getSystemInfoJSON();
+    unsigned long getSystemTotalMemory();
+    unsigned long getSystemAvailableMemory();
 
     container_manager_t* cm_;
     int port_;

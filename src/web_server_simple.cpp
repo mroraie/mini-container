@@ -6,6 +6,8 @@
 #include <cstring>
 #include <sstream>
 #include <iostream>
+#include <fstream>
+#include <ctime>
 
 SimpleWebServer::SimpleWebServer(container_manager_t* cm, int port)
     : cm_(cm), port_(port), running_(false), server_socket_(-1) {
@@ -114,6 +116,12 @@ std::string SimpleWebServer::handleRequest(const std::string& request) {
                       "Access-Control-Allow-Origin: *\r\n"
                       "Connection: close\r\n\r\n" +
                       getContainerListJSON();
+            } else if (path == "/api/system") {
+                return "HTTP/1.1 200 OK\r\n"
+                      "Content-Type: application/json\r\n"
+                      "Access-Control-Allow-Origin: *\r\n"
+                      "Connection: close\r\n\r\n" +
+                      getSystemInfoJSON();
             } else {
                 return "HTTP/1.1 404 Not Found\r\n"
                       "Content-Type: text/plain\r\n"
@@ -170,6 +178,99 @@ std::string SimpleWebServer::getContainerListJSON() {
 
         json += "]}";
         return json;
+}
+
+unsigned long SimpleWebServer::getSystemTotalMemory() {
+    std::ifstream meminfo("/proc/meminfo");
+    if (!meminfo.is_open()) {
+        return 0;
+    }
+    
+    std::string line;
+    while (std::getline(meminfo, line)) {
+        if (line.find("MemTotal:") == 0) {
+            std::istringstream iss(line);
+            std::string label, value, unit;
+            iss >> label >> value >> unit;
+            unsigned long kb = std::stoul(value);
+            return kb * 1024; // Convert KB to bytes
+        }
+    }
+    return 0;
+}
+
+unsigned long SimpleWebServer::getSystemAvailableMemory() {
+    std::ifstream meminfo("/proc/meminfo");
+    if (!meminfo.is_open()) {
+        return 0;
+    }
+    
+    std::string line;
+    while (std::getline(meminfo, line)) {
+        if (line.find("MemAvailable:") == 0) {
+            std::istringstream iss(line);
+            std::string label, value, unit;
+            iss >> label >> value >> unit;
+            unsigned long kb = std::stoul(value);
+            return kb * 1024; // Convert KB to bytes
+        }
+    }
+    // Fallback to MemFree if MemAvailable not available
+    meminfo.clear();
+    meminfo.seekg(0);
+    while (std::getline(meminfo, line)) {
+        if (line.find("MemFree:") == 0) {
+            std::istringstream iss(line);
+            std::string label, value, unit;
+            iss >> label >> value >> unit;
+            unsigned long kb = std::stoul(value);
+            return kb * 1024; // Convert KB to bytes
+        }
+    }
+    return 0;
+}
+
+std::string SimpleWebServer::getSystemInfoJSON() {
+    unsigned long total_mem = getSystemTotalMemory();
+    unsigned long available_mem = getSystemAvailableMemory();
+    unsigned long used_mem = total_mem - available_mem;
+    
+    // Calculate total CPU and memory usage from all containers
+    int count;
+    container_info_t** containers = container_manager_list(cm_, &count);
+    
+    unsigned long total_container_memory = 0;
+    double total_container_cpu_percent = 0.0;
+    int running_count = 0;
+    
+    for (int i = 0; i < count; i++) {
+        container_info_t* info = containers[i];
+        if (info->state == CONTAINER_RUNNING) {
+            running_count++;
+            unsigned long cpu_usage = 0, memory_usage = 0;
+            resource_manager_get_stats(cm_->rm, info->id, &cpu_usage, &memory_usage);
+            total_container_memory += memory_usage;
+            
+            if (info->started_at > 0) {
+                time_t now = time(nullptr);
+                long elapsed = now - info->started_at;
+                if (elapsed > 0) {
+                    double cpu_seconds = cpu_usage / 1e9;
+                    double cpu_percent = (cpu_seconds / elapsed) * 100.0;
+                    total_container_cpu_percent += cpu_percent;
+                }
+            }
+        }
+    }
+    
+    std::string json = "{";
+    json += "\"total_memory\":" + std::to_string(total_mem) + ",";
+    json += "\"available_memory\":" + std::to_string(available_mem) + ",";
+    json += "\"used_memory\":" + std::to_string(used_mem) + ",";
+    json += "\"total_container_memory\":" + std::to_string(total_container_memory) + ",";
+    json += "\"total_container_cpu_percent\":" + std::to_string(total_container_cpu_percent);
+    json += "}";
+    return json;
 }
 
 std::string SimpleWebServer::generateHTML() {
@@ -330,6 +431,18 @@ std::string SimpleWebServer::generateHTML() {
             <span class="stat-value" id="total-count">0</span>
         </div>
         <div class="stat-item">
+            <span class="stat-label">Total CPU Usage:</span>
+            <span class="stat-value" id="total-cpu">0.0%</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Total Memory:</span>
+            <span class="stat-value" id="total-memory">--</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Available Memory:</span>
+            <span class="stat-value" id="available-memory">--</span>
+        </div>
+        <div class="stat-item">
             <span class="stat-label">Last Update:</span>
             <span class="stat-value" id="update-time">--:--:--</span>
         </div>
@@ -423,30 +536,47 @@ std::string SimpleWebServer::generateHTML() {
         }
 
         function updateMonitor() {
-            fetch('/api/containers')
-                .then(response => response.json())
-                .then(data => {
+            Promise.all([
+                fetch('/api/containers').then(r => r.json()),
+                fetch('/api/system').then(r => r.json())
+            ])
+                .then(([containerData, systemData]) => {
                     const tbody = document.getElementById('container-table-body');
                     const runningCount = document.getElementById('running-count');
                     const totalCount = document.getElementById('total-count');
+                    const totalCpu = document.getElementById('total-cpu');
+                    const totalMemory = document.getElementById('total-memory');
+                    const availableMemory = document.getElementById('available-memory');
                     const updateTime = document.getElementById('update-time');
 
-                    const running = data.containers ? data.containers.filter(c => c.state === 'RUNNING').length : 0;
-                    const total = data.containers ? data.containers.length : 0;
+                    const running = containerData.containers ? containerData.containers.filter(c => c.state === 'RUNNING').length : 0;
+                    const total = containerData.containers ? containerData.containers.length : 0;
                     runningCount.textContent = running;
                     totalCount.textContent = total;
+
+                    if (systemData) {
+                        if (systemData.total_container_cpu_percent !== undefined) {
+                            totalCpu.textContent = parseFloat(systemData.total_container_cpu_percent).toFixed(1) + '%';
+                        }
+                        if (systemData.total_memory !== undefined) {
+                            totalMemory.textContent = formatBytes(parseInt(systemData.total_memory));
+                        }
+                        if (systemData.available_memory !== undefined) {
+                            availableMemory.textContent = formatBytes(parseInt(systemData.available_memory));
+                        }
+                    }
 
                     const now = new Date();
                     updateTime.textContent = now.toLocaleTimeString('en-US');
 
                     tbody.innerHTML = '';
 
-                    if (!data.containers || data.containers.length === 0) {
+                    if (!containerData.containers || containerData.containers.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="7" class="no-containers">No containers found</td></tr>';
                         return;
                     }
 
-                    const sorted = [...data.containers].sort((a, b) => {
+                    const sorted = [...containerData.containers].sort((a, b) => {
                         if (a.state === 'RUNNING' && b.state !== 'RUNNING') return -1;
                         if (a.state !== 'RUNNING' && b.state === 'RUNNING') return 1;
                         return (b.started_at || 0) - (a.started_at || 0);
@@ -499,12 +629,20 @@ std::string SimpleWebServer::generateHTML() {
                         const runtime = container.started_at ? 
                             Math.floor(Date.now() / 1000) - container.started_at : 0;
 
+                        const cpuBar = cpuPercent > 0 ? 
+                            `<div class="cpu-bar"><div class="cpu-bar-fill" style="width: ${Math.min(100, cpuPercent)}%"></div></div> ${cpuDisplay}` :
+                            cpuDisplay;
+                        
+                        const memBar = memoryPercent > 0 ?
+                            `<div class="memory-bar"><div class="memory-bar-fill" style="width: ${Math.min(100, memoryPercent)}%"></div></div> ${memoryDisplay}` :
+                            memoryDisplay;
+
                         row.innerHTML = `
                             <td>${container.id}</td>
                             <td>${container.pid || '-----'}</td>
                             <td class="${statusClass}">${statusText}</td>
-                            <td>-----</td>
-                            <td>-----</td>
+                            <td>${cpuBar}</td>
+                            <td>${memBar}</td>
                             <td>${formatTime(runtime)}</td>
                             <td>${formatDate(container.created_at)}</td>
                         `;
