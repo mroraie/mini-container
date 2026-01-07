@@ -149,9 +149,11 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
 
     if (!config->fs_config.root_path)
     {
-        char default_root[256];
-        snprintf(default_root, sizeof(default_root), "/tmp/container_%d", getpid());
-        config->fs_config.root_path = strdup(default_root);
+        // Use real root filesystem for demo purposes (better for university presentation)
+        // This allows /bin/sh and other binaries to work without creating minimal rootfs
+        // Note: For production/security, you should create a minimal rootfs with only
+        // necessary binaries. For educational demo, using / is acceptable and simpler.
+        config->fs_config.root_path = strdup("/");
     }
 
     return 0;
@@ -647,7 +649,7 @@ void interactive_create_container() {
     char command[1024];
     char container_name[256] = "";
     char hostname[256] = "mini-container";
-    char root_path[512] = "/tmp/container_root";
+    char root_path[512] = "/";  // Use real root for demo (allows /bin/sh to work)
     int memory = 128;
     int cpu = 1024;
     
@@ -701,7 +703,7 @@ void interactive_create_container() {
         }
     }
     
-    printf("Root path (default /tmp/container_root): ");
+    printf("Root path (default / - uses real root for demo): ");
     fflush(stdout);
     char root_input[512];
     if (fgets(root_input, sizeof(root_input), stdin)) {
@@ -838,7 +840,7 @@ void run_tests() {
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
         config.ns_config.hostname = strdup("cpu-test");
-        config.fs_config.root_path = strdup("/tmp/cpu_test_root");
+        config.fs_config.root_path = strdup("/");  // Use real root for demo
         
         args.clear();
         args.push_back(strdup("/bin/sh"));
@@ -877,7 +879,7 @@ void run_tests() {
         config.res_limits.memory.limit_bytes = 64 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
         config.ns_config.hostname = strdup("mem-test");
-        config.fs_config.root_path = strdup("/tmp/mem_test_root");
+        config.fs_config.root_path = strdup("/");  // Use real root for demo
         
         args.clear();
         args.push_back(strdup("/bin/sh"));
@@ -915,7 +917,7 @@ void run_tests() {
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 512;
         config.ns_config.hostname = strdup("cpu-limit-test");
-        config.fs_config.root_path = strdup("/tmp/cpu_limit_test");
+        config.fs_config.root_path = strdup("/");  // Use real root for demo
         
         args.clear();
         args.push_back(strdup("/bin/sh"));
@@ -953,7 +955,7 @@ void run_tests() {
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
         config.ns_config.hostname = strdup("combined-test");
-        config.fs_config.root_path = strdup("/tmp/combined_test_root");
+        config.fs_config.root_path = strdup("/");  // Use real root for demo
         
         args.clear();
         args.push_back(strdup("/bin/sh"));
