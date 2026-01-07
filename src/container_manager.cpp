@@ -134,28 +134,37 @@ static int load_state(container_manager_t *cm) {
     pid_t pid = 0;
     int state = 0;
     time_t created_at = 0, started_at = 0, stopped_at = 0;
-    bool in_container = false;
     int loaded = 0;
+    bool in_container = false;
 
     while (fgets(line, sizeof(line), fp)) {
-        // Remove whitespace
+        // Remove leading whitespace
         char* p = line;
         while (*p == ' ' || *p == '\t') p++;
         
-        // Parse container entry
+        // Skip empty lines and brackets
+        if (*p == '\n' || *p == '\0' || *p == '{' || *p == '[' || *p == ']') {
+            continue;
+        }
+        
+        // Check if we're entering a container object
         if (strstr(p, "\"id\"")) {
+            in_container = true;
             sscanf(p, " \"id\": \"%255[^\"]\"", container_id);
-        } else if (strstr(p, "\"pid\"")) {
+        } else if (in_container && strstr(p, "\"pid\"")) {
             sscanf(p, " \"pid\": %d", &pid);
-        } else if (strstr(p, "\"state\"")) {
+        } else if (in_container && strstr(p, "\"state\"")) {
             sscanf(p, " \"state\": %d", &state);
-        } else if (strstr(p, "\"created_at\"")) {
+        } else if (in_container && strstr(p, "\"created_at\"")) {
             sscanf(p, " \"created_at\": %ld", &created_at);
-        } else if (strstr(p, "\"started_at\"")) {
+        } else if (in_container && strstr(p, "\"started_at\"")) {
             sscanf(p, " \"started_at\": %ld", &started_at);
-        } else if (strstr(p, "\"stopped_at\"")) {
+        } else if (in_container && strstr(p, "\"stopped_at\"")) {
             sscanf(p, " \"stopped_at\": %ld", &stopped_at);
-        } else if (strstr(p, "}")) {
+        }
+        
+        // Check for end of container object (} or },)
+        if (in_container && (strstr(p, "}") || (strstr(p, "},")))) {
             // End of container entry
             if (container_id[0] != '\0') {
                 // Check if PID is still alive
@@ -190,6 +199,7 @@ static int load_state(container_manager_t *cm) {
                 pid = 0;
                 state = 0;
                 created_at = started_at = stopped_at = 0;
+                in_container = false;
             }
         }
     }

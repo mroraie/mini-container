@@ -236,6 +236,9 @@ static int handle_list(int argc, char *argv[])
     if (count == 0)
     {
         printf("No containers\n");
+        printf("\nTo create a container, use:\n");
+        printf("  ./mini-container run /bin/sh -c \"while true; do :; done\"\n");
+        printf("  or use interactive menu: ./mini-container\n");
         return EXIT_SUCCESS;
     }
 
