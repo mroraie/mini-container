@@ -15,12 +15,14 @@
 #include <vector>
 #include <algorithm>
 #include "../include/container_manager.hpp"
+#include "web_server_simple.hpp"
 
 using namespace std;
 
 static container_manager_t cm;
 static bool running = true;
 static bool monitor_mode = false;
+static SimpleWebServer* web_server = nullptr;
 
 static const char *state_names[] = {
     [CONTAINER_CREATED] = "CREATED",
@@ -999,12 +1001,16 @@ void signal_handler(int signum) {
     running = false;
     monitor_mode = false;
     show_cursor();
+    
+    // Stop web server
+    if (web_server) {
+        web_server->stop();
+    }
 }
 
 // Interactive menu with live monitor
 void interactive_menu() {
-    signal(SIGINT, signal_handler);
-    signal(SIGTERM, signal_handler);
+    // Signal handlers already set in main()
     
     // Set terminal to non-canonical mode for non-blocking input
     struct termios old_term, new_term;
@@ -1247,10 +1253,22 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Warning: container operations typically require root privileges\n");
     }
 
+    // Start web server automatically
+    web_server = new SimpleWebServer(&cm, 808);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
+    web_server->start();
+    printf("Web server started on port 808\n");
+    printf("Open http://localhost:808 in your browser\n");
+
     // If no arguments, run interactive menu
     if (argc < 2)
     {
         interactive_menu();
+        if (web_server) {
+            web_server->stop();
+            delete web_server;
+        }
         container_manager_cleanup(&cm);
         return EXIT_SUCCESS;
     }
@@ -1308,6 +1326,13 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Unknown command: %s\n", command);
         print_usage(argv[0]);
         result = EXIT_FAILURE;
+    }
+
+    // Stop web server before cleanup
+    if (web_server) {
+        web_server->stop();
+        delete web_server;
+        web_server = nullptr;
     }
 
     container_manager_cleanup(&cm);

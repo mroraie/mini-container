@@ -3,7 +3,7 @@ CXXFLAGS = -Wall -Wextra -std=c++11 -Iinclude
 LDFLAGS =
 
 # Source files
-SRCS = src/main.cpp src/container_manager.cpp src/namespace_handler.cpp src/resource_manager.cpp src/filesystem_manager.cpp
+SRCS = src/main.cpp src/web_server_simple.cpp src/container_manager.cpp src/namespace_handler.cpp src/resource_manager.cpp src/filesystem_manager.cpp
 WEB_SRCS = src/web_server_main.cpp src/web_server_simple.cpp src/container_manager.cpp src/namespace_handler.cpp src/resource_manager.cpp src/filesystem_manager.cpp
 OBJS = $(SRCS:.cpp=.o)
 WEB_OBJS = $(WEB_SRCS:.cpp=.o)
@@ -20,7 +20,7 @@ web: $(WEB_TARGET)
 
 # Build main application
 $(TARGET): $(OBJS)
-	$(CXX) $(LDFLAGS) -o $@ $^
+	$(CXX) $(LDFLAGS) -o $@ $^ -lpthread
 
 # Build web server application
 $(WEB_TARGET): $(WEB_OBJS)
