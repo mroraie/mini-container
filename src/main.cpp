@@ -1388,17 +1388,62 @@ void signal_handler(int signum) {
     monitor_mode = false;
     show_cursor();
     
-    // Stop all containers first
+    // Stop all containers first - kill all processes in cgroups
     int count;
     container_info_t** containers = container_manager_list(&cm, &count);
     for (int i = 0; i < count; i++) {
         if (containers[i]->state == CONTAINER_RUNNING) {
+            // Kill all processes in the container's cgroup
+            char cgroup_procs_path[512];
+            if (cm.rm->version == CGROUP_V2) {
+                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                         "/sys/fs/cgroup/%s_%s/cgroup.procs", cm.rm->cgroup_path, containers[i]->id);
+            } else {
+                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                         "/sys/fs/cgroup/cpu,cpuacct/%s_%s/tasks", cm.rm->cgroup_path, containers[i]->id);
+            }
+            
+            FILE *fp = fopen(cgroup_procs_path, "r");
+            if (fp) {
+                pid_t pid;
+                while (fscanf(fp, "%d", &pid) == 1) {
+                    if (pid > 0) {
+                        kill(pid, SIGKILL);
+                    }
+                }
+                fclose(fp);
+            }
+            
+            // Also stop via container manager
             container_manager_stop(&cm, containers[i]->id);
         }
     }
     
-    // Wait a bit for containers to stop
-    sleep(1);
+    // Wait a bit for all processes to terminate
+    sleep(2);
+    
+    // Force kill any remaining processes in cgroups
+    for (int i = 0; i < count; i++) {
+        char cgroup_procs_path[512];
+        if (cm.rm->version == CGROUP_V2) {
+            snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                     "/sys/fs/cgroup/%s_%s/cgroup.procs", cm.rm->cgroup_path, containers[i]->id);
+        } else {
+            snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                     "/sys/fs/cgroup/cpu,cpuacct/%s_%s/tasks", cm.rm->cgroup_path, containers[i]->id);
+        }
+        
+        FILE *fp = fopen(cgroup_procs_path, "r");
+        if (fp) {
+            pid_t pid;
+            while (fscanf(fp, "%d", &pid) == 1) {
+                if (pid > 0) {
+                    kill(pid, SIGKILL);
+                }
+            }
+            fclose(fp);
+        }
+    }
     
     // Stop web server
     if (web_server) {

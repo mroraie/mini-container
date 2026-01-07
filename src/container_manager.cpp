@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <ctime>
 #include <csignal>
+#include <dirent.h>
 #include "../include/container_manager.hpp"
 
 using namespace std;
@@ -72,6 +73,53 @@ static int is_pid_alive(pid_t pid) {
         return 1;
     }
     return (errno == ESRCH) ? 0 : 1;
+}
+
+// Kill all child processes of a PID
+static void kill_process_tree(pid_t pid) {
+    if (pid <= 0) return;
+    
+    // First, try SIGTERM to allow graceful shutdown
+    kill(pid, SIGTERM);
+    usleep(100000); // Wait 100ms
+    
+    // Check if process is still alive
+    if (kill(pid, 0) == 0) {
+        // Process still alive, try SIGKILL
+        kill(pid, SIGKILL);
+        usleep(50000); // Wait 50ms
+    }
+    
+    // Kill all children in the process tree
+    char proc_path[256];
+    snprintf(proc_path, sizeof(proc_path), "/proc/%d/task", pid);
+    
+    DIR *dir = opendir(proc_path);
+    if (dir) {
+        struct dirent *entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            if (entry->d_name[0] == '.') continue;
+            
+            pid_t tid = atoi(entry->d_name);
+            if (tid > 0 && tid != pid) {
+                kill(tid, SIGKILL);
+            }
+        }
+        closedir(dir);
+    }
+    
+    // Also try to kill children via /proc/<pid>/task
+    snprintf(proc_path, sizeof(proc_path), "/proc/%d/task/%d/children", pid, pid);
+    FILE *fp = fopen(proc_path, "r");
+    if (fp) {
+        pid_t child_pid;
+        while (fscanf(fp, "%d", &child_pid) == 1) {
+            if (child_pid > 0) {
+                kill_process_tree(child_pid); // Recursively kill children
+            }
+        }
+        fclose(fp);
+    }
 }
 
 static const char* get_state_file_path() {
@@ -326,18 +374,45 @@ int container_manager_stop(container_manager_t *cm, const char *container_id) {
         return -1;
     }
 
-    if (kill(info->pid, SIGTERM) == -1) {
-        perror("kill SIGTERM failed");
-        if (kill(info->pid, SIGKILL) == -1) {
-            perror("kill SIGKILL failed");
-            return -1;
+    // Kill the entire process tree including all children
+    kill_process_tree(info->pid);
+    
+    // Also kill all processes in the cgroup
+    char cgroup_procs_path[512];
+    if (cm->rm->version == CGROUP_V2) {
+        snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                 "/sys/fs/cgroup/%s_%s/cgroup.procs", cm->rm->cgroup_path, container_id);
+    } else {
+        snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                 "/sys/fs/cgroup/cpu,cpuacct/%s_%s/tasks", cm->rm->cgroup_path, container_id);
+    }
+    
+    FILE *fp = fopen(cgroup_procs_path, "r");
+    if (fp) {
+        pid_t pid;
+        while (fscanf(fp, "%d", &pid) == 1) {
+            if (pid > 0 && pid != info->pid) {
+                kill_process_tree(pid);
+            }
         }
+        fclose(fp);
     }
 
+    // Wait for process to terminate
     int status;
-    if (waitpid(info->pid, &status, 0) == -1) {
-        perror("waitpid failed");
-        return -1;
+    int waited = 0;
+    for (int i = 0; i < 10; i++) { // Try up to 1 second
+        if (waitpid(info->pid, &status, WNOHANG) == info->pid) {
+            waited = 1;
+            break;
+        }
+        usleep(100000); // Wait 100ms
+    }
+    
+    // If still not terminated, force kill
+    if (!waited && kill(info->pid, 0) == 0) {
+        kill(info->pid, SIGKILL);
+        waitpid(info->pid, &status, 0);
     }
 
     info->state = CONTAINER_STOPPED;
