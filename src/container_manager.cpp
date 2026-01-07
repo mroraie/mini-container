@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <ctime>
 #include <csignal>
 #include "../include/container_manager.hpp"
@@ -14,6 +16,9 @@ using namespace std;
 #define MAX_CONTAINER_ID 64
 
 #define DEFAULT_MAX_CONTAINERS 10
+
+#define STATE_FILE_PATH "/var/run/mini-container/state.json"
+#define STATE_FILE_PATH_FALLBACK "/tmp/mini-container-state.json"
 
 static char *generate_container_id() {
     static int counter = 0;
@@ -61,6 +66,138 @@ static void remove_container(container_manager_t *cm, const char *container_id) 
     }
 }
 
+// Check if PID is still alive
+static int is_pid_alive(pid_t pid) {
+    if (pid <= 0) return 0;
+    // Use kill(pid, 0) to check if process exists
+    // Returns 0 if process exists, -1 with errno=ESRCH if not
+    if (kill(pid, 0) == 0) {
+        return 1;
+    }
+    return (errno == ESRCH) ? 0 : 1; // If errno is ESRCH, process doesn't exist
+}
+
+// Get state file path (try /var/run first, fallback to /tmp)
+static const char* get_state_file_path() {
+    struct stat st;
+    // Try /var/run/mini-container first
+    if (stat("/var/run/mini-container", &st) == 0 || mkdir("/var/run/mini-container", 0755) == 0) {
+        return STATE_FILE_PATH;
+    }
+    // Fallback to /tmp
+    return STATE_FILE_PATH_FALLBACK;
+}
+
+// Save container state to file
+static void save_state(container_manager_t *cm) {
+    const char* state_file = get_state_file_path();
+    FILE* fp = fopen(state_file, "w");
+    if (!fp) {
+        // Silently fail - state persistence is optional
+        return;
+    }
+
+    fprintf(fp, "{\n");
+    fprintf(fp, "  \"containers\": [\n");
+    
+    for (int i = 0; i < cm->container_count; i++) {
+        container_info_t* info = cm->containers[i];
+        fprintf(fp, "    {\n");
+        fprintf(fp, "      \"id\": \"%s\",\n", info->id);
+        fprintf(fp, "      \"pid\": %d,\n", info->pid);
+        fprintf(fp, "      \"state\": %d,\n", info->state);
+        fprintf(fp, "      \"created_at\": %ld,\n", info->created_at);
+        fprintf(fp, "      \"started_at\": %ld,\n", info->started_at);
+        fprintf(fp, "      \"stopped_at\": %ld\n", info->stopped_at);
+        fprintf(fp, "    }%s\n", (i < cm->container_count - 1) ? "," : "");
+    }
+    
+    fprintf(fp, "  ]\n");
+    fprintf(fp, "}\n");
+    
+    fclose(fp);
+}
+
+// Load container state from file
+static int load_state(container_manager_t *cm) {
+    const char* state_file = get_state_file_path();
+    FILE* fp = fopen(state_file, "r");
+    if (!fp) {
+        // No state file exists yet - this is OK
+        return 0;
+    }
+
+    // Simple JSON parser (basic implementation)
+    // Read the file and parse container entries
+    char line[1024];
+    char container_id[256] = {0};
+    pid_t pid = 0;
+    int state = 0;
+    time_t created_at = 0, started_at = 0, stopped_at = 0;
+    bool in_container = false;
+    int loaded = 0;
+
+    while (fgets(line, sizeof(line), fp)) {
+        // Remove whitespace
+        char* p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        
+        // Parse container entry
+        if (strstr(p, "\"id\"")) {
+            sscanf(p, " \"id\": \"%255[^\"]\"", container_id);
+        } else if (strstr(p, "\"pid\"")) {
+            sscanf(p, " \"pid\": %d", &pid);
+        } else if (strstr(p, "\"state\"")) {
+            sscanf(p, " \"state\": %d", &state);
+        } else if (strstr(p, "\"created_at\"")) {
+            sscanf(p, " \"created_at\": %ld", &created_at);
+        } else if (strstr(p, "\"started_at\"")) {
+            sscanf(p, " \"started_at\": %ld", &started_at);
+        } else if (strstr(p, "\"stopped_at\"")) {
+            sscanf(p, " \"stopped_at\": %ld", &stopped_at);
+        } else if (strstr(p, "}")) {
+            // End of container entry
+            if (container_id[0] != '\0') {
+                // Check if PID is still alive
+                if (state == CONTAINER_RUNNING && !is_pid_alive(pid)) {
+                    // Process died, mark as stopped
+                    state = CONTAINER_STOPPED;
+                    stopped_at = time(nullptr);
+                }
+                
+                // Only restore if container is not destroyed
+                if (state != CONTAINER_DESTROYED) {
+                    container_info_t *info = static_cast<container_info_t*>(calloc(1, sizeof(container_info_t)));
+                    if (info) {
+                        info->id = strdup(container_id);
+                        info->pid = pid;
+                        info->state = static_cast<container_state_t>(state);
+                        info->created_at = created_at;
+                        info->started_at = started_at;
+                        info->stopped_at = stopped_at;
+                        
+                        if (add_container(cm, info) == 0) {
+                            loaded++;
+                        } else {
+                            free(info->id);
+                            free(info);
+                        }
+                    }
+                }
+                
+                // Reset for next container
+                memset(container_id, 0, sizeof(container_id));
+                pid = 0;
+                state = 0;
+                created_at = started_at = stopped_at = 0;
+            }
+        }
+    }
+    
+    fclose(fp);
+    return loaded;
+}
+
 int container_manager_init(container_manager_t *cm, int max_containers) {
     if (!cm) {
         fprintf(stderr, "Error: container manager is NULL\n");
@@ -88,6 +225,12 @@ int container_manager_init(container_manager_t *cm, int max_containers) {
         free(cm->containers);
         free(cm->rm);
         return -1;
+    }
+
+    // Load state from file
+    int loaded = load_state(cm);
+    if (loaded > 0) {
+        fprintf(stderr, "Loaded %d container(s) from state file\n", loaded);
     }
 
     return 0;
@@ -152,6 +295,9 @@ int container_manager_create(container_manager_t *cm,
         return -1;
     }
 
+    // Save state after creating container
+    save_state(cm);
+
     return 0;
 }
 
@@ -200,6 +346,9 @@ int container_manager_stop(container_manager_t *cm, const char *container_id) {
     info->state = CONTAINER_STOPPED;
     info->stopped_at = time(nullptr);
 
+    // Save state after stopping container
+    save_state(cm);
+
     return 0;
 }
 
@@ -219,6 +368,9 @@ int container_manager_destroy(container_manager_t *cm, const char *container_id)
     resource_manager_destroy_cgroup(cm->rm, container_id);
 
     remove_container(cm, container_id);
+
+    // Save state after destroying container
+    save_state(cm);
 
     return 0;
 }
@@ -288,9 +440,11 @@ container_info_t *container_manager_get_info(container_manager_t *cm,
 void container_manager_cleanup(container_manager_t *cm) {
     if (!cm) return;
 
-    while (cm->container_count > 0) {
-        container_manager_destroy(cm, cm->containers[0]->id);
-    }
+    // Save state before cleanup (so we preserve state even if program crashes)
+    save_state(cm);
+
+    // Note: We don't destroy containers here - they should be explicitly destroyed
+    // or they will be cleaned up on next load if their PIDs are dead
 
     if (cm->rm) {
         resource_manager_cleanup(cm->rm);
@@ -298,6 +452,13 @@ void container_manager_cleanup(container_manager_t *cm) {
     }
 
     if (cm->containers) {
+        // Free container info structures but don't destroy containers
+        for (int i = 0; i < cm->container_count; i++) {
+            if (cm->containers[i]) {
+                free(cm->containers[i]->id);
+                free(cm->containers[i]);
+            }
+        }
         free(cm->containers);
     }
 }
@@ -352,6 +513,9 @@ int container_manager_run(container_manager_t *cm, container_config_t *config) {
         info->state = CONTAINER_RUNNING;
         info->started_at = time(nullptr);
     }
+
+    // Save state after starting container
+    save_state(cm);
 
     // Note: PID is now added to cgroup from within the child process (before execvp)
     // This ensures the process is in the cgroup from the start

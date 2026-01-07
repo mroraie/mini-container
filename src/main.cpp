@@ -8,6 +8,7 @@
 #include <csignal>
 #include <termios.h>
 #include <sys/ioctl.h>
+#include <sys/select.h>
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -397,6 +398,106 @@ double calculate_cpu_percent(unsigned long cpu_ns, time_t start_time) {
     // Convert nanoseconds to seconds and calculate percentage
     double cpu_seconds = cpu_ns / 1e9;
     return (cpu_seconds / elapsed) * 100.0;
+}
+
+// Display compact monitor (for main menu)
+void display_compact_monitor() {
+    int count;
+    container_info_t **containers = container_manager_list(&cm, &count);
+    
+    // Stats bar
+    int running_count = 0;
+    for (int i = 0; i < count; i++) {
+        if (containers[i]->state == CONTAINER_RUNNING) {
+            running_count++;
+        }
+    }
+    
+    set_color(COLOR_BOLD);
+    set_color(COLOR_CYAN);
+    printf("╔══════════════════════════════════════════════════════════════════════════════╗\n");
+    printf("║                    Mini Container Monitor (Live)                              ║\n");
+    printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
+    reset_color();
+    
+    set_color(COLOR_GREEN);
+    printf("Running: %d  ", running_count);
+    reset_color();
+    printf("Total: %d  ", count);
+    
+    time_t now = time(nullptr);
+    char time_str[64];
+    strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&now));
+    printf("Time: %s\n", time_str);
+    printf("───────────────────────────────────────────────────────────────────────────────\n");
+    
+    // Table header
+    set_color(COLOR_BOLD);
+    printf("%-20s %-8s %-10s %-12s %-12s %-10s\n",
+           "CONTAINER ID", "PID", "STATE", "CPU%", "MEMORY", "RUNTIME");
+    reset_color();
+    printf("───────────────────────────────────────────────────────────────────────────────\n");
+    
+    if (count == 0) {
+        set_color(COLOR_YELLOW);
+        printf("No containers running\n");
+        reset_color();
+    } else {
+        // Sort: running first
+        vector<container_info_t*> sorted_containers;
+        for (int i = 0; i < count; i++) {
+            sorted_containers.push_back(containers[i]);
+        }
+        sort(sorted_containers.begin(), sorted_containers.end(),
+             [](container_info_t* a, container_info_t* b) {
+                 if (a->state == CONTAINER_RUNNING && b->state != CONTAINER_RUNNING) return true;
+                 if (a->state != CONTAINER_RUNNING && b->state == CONTAINER_RUNNING) return false;
+                 return a->started_at > b->started_at;
+             });
+        
+        // Show max 10 containers in compact view
+        int max_display = (sorted_containers.size() > 10) ? 10 : sorted_containers.size();
+        for (int i = 0; i < max_display; i++) {
+            container_info_t* info = sorted_containers[i];
+            const char* state = state_names[info->state];
+            const char* state_color = COLOR_WHITE;
+            
+            if (info->state == CONTAINER_RUNNING) {
+                state_color = COLOR_GREEN;
+            } else if (info->state == CONTAINER_STOPPED) {
+                state_color = COLOR_RED;
+            } else if (info->state == CONTAINER_CREATED) {
+                state_color = COLOR_YELLOW;
+            }
+            
+            printf("%-20s %-8d ", info->id, info->pid);
+            set_color(state_color);
+            printf("%-10s", state);
+            reset_color();
+            
+            if (info->state == CONTAINER_RUNNING) {
+                unsigned long cpu_usage = 0, memory_usage = 0;
+                resource_manager_get_stats(cm.rm, info->id, &cpu_usage, &memory_usage);
+                
+                double cpu_percent = calculate_cpu_percent(cpu_usage, info->started_at);
+                string mem_str = format_bytes(memory_usage);
+                
+                printf(" %-12.1f %-12s", cpu_percent, mem_str.c_str());
+            } else {
+                printf(" %-12s %-12s", "--", "--");
+            }
+            
+            string runtime = format_duration(info->started_at, now);
+            printf(" %-10s\n", runtime.c_str());
+        }
+        
+        if (sorted_containers.size() > 10) {
+            set_color(COLOR_YELLOW);
+            printf("... and %d more container(s)\n", (int)(sorted_containers.size() - 10));
+            reset_color();
+        }
+    }
+    printf("\n");
 }
 
 // Display htop-like monitor
@@ -895,39 +996,163 @@ void signal_handler(int signum) {
     show_cursor();
 }
 
-// Interactive menu
+// Interactive menu with live monitor
 void interactive_menu() {
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     
+    // Set terminal to non-canonical mode for non-blocking input
+    struct termios old_term, new_term;
+    tcgetattr(STDIN_FILENO, &old_term);
+    new_term = old_term;
+    new_term.c_lflag &= ~(ICANON | ECHO);
+    new_term.c_cc[VMIN] = 0;
+    new_term.c_cc[VTIME] = 0;
+    
+    hide_cursor();
+    
     while (running) {
         clear_screen();
+        
+        // Display live monitor at top
+        display_compact_monitor();
+        
+        // Display menu at bottom
+        printf("╔══════════════════════════════════════════════════════════════════════════════╗\n");
         set_color(COLOR_BOLD);
         set_color(COLOR_CYAN);
-        printf("╔══════════════════════════════════════════════════════════════════════════════╗\n");
-        printf("║                    Mini Container - Interactive Menu                          ║\n");
-        printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
+        printf("║                          Commands Menu                                      ║\n");
         reset_color();
-        
+        printf("╠══════════════════════════════════════════════════════════════════════════════╣\n");
+        printf("║  1. Create Container         2. Full Monitor (htop)     3. List Containers  ║\n");
+        printf("║  4. Stop Container           5. Destroy Container        6. Container Info  ║\n");
+        printf("║  7. Run Tests                0. Exit                                        ║\n");
+        printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
         printf("\n");
-        printf("1. Create Container\n");
-        printf("2. Monitor (htop-like)\n");
-        printf("3. List Containers\n");
-        printf("4. Stop Container\n");
-        printf("5. Destroy Container\n");
-        printf("6. Container Info\n");
-        printf("7. Run Tests\n");
-        printf("0. Exit\n");
-        printf("\n");
-        printf("Select option: ");
+        set_color(COLOR_YELLOW);
+        printf("Select option (auto-refresh every 1 second): ");
+        reset_color();
         fflush(stdout);
         
-        char choice[10];
-        if (!fgets(choice, sizeof(choice), stdin)) {
-            break;
+        // Check for input (non-blocking)
+        tcsetattr(STDIN_FILENO, TCSANOW, &new_term);
+        
+        char choice = 0;
+        fd_set readfds;
+        struct timeval timeout;
+        
+        FD_ZERO(&readfds);
+        FD_SET(STDIN_FILENO, &readfds);
+        timeout.tv_sec = 1;
+        timeout.tv_usec = 0;
+        
+        int select_result = select(STDIN_FILENO + 1, &readfds, nullptr, nullptr, &timeout);
+        
+        if (select_result > 0 && FD_ISSET(STDIN_FILENO, &readfds)) {
+            if (read(STDIN_FILENO, &choice, 1) > 0) {
+                // User pressed a key
+                int option = choice - '0';
+                
+                // Restore terminal settings for blocking input
+                tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
+                show_cursor();
+                
+                // Handle menu option
+                switch (option) {
+                    case 1:
+                        clear_screen();
+                        interactive_create_container();
+                        break;
+                    case 2:
+                        monitor_mode = true;
+                        display_monitor();
+                        monitor_mode = false;
+                        break;
+                    case 3:
+                        clear_screen();
+                        handle_list(0, nullptr);
+                        printf("\nPress Enter to continue...");
+                        getchar();
+                        break;
+                    case 4: {
+                        clear_screen();
+                        printf("Container ID: ");
+                        fflush(stdout);
+                        char id[256];
+                        if (fgets(id, sizeof(id), stdin)) {
+                            size_t len = strlen(id);
+                            if (len > 0 && id[len-1] == '\n') {
+                                id[len-1] = '\0';
+                            }
+                            char* argv[] = {"stop", id, nullptr};
+                            handle_stop(2, argv);
+                            printf("\nPress Enter to continue...");
+                            getchar();
+                        }
+                        break;
+                    }
+                    case 5: {
+                        clear_screen();
+                        printf("Container ID: ");
+                        fflush(stdout);
+                        char id[256];
+                        if (fgets(id, sizeof(id), stdin)) {
+                            size_t len = strlen(id);
+                            if (len > 0 && id[len-1] == '\n') {
+                                id[len-1] = '\0';
+                            }
+                            char* argv[] = {"destroy", id, nullptr};
+                            handle_destroy(2, argv);
+                            printf("\nPress Enter to continue...");
+                            getchar();
+                        }
+                        break;
+                    }
+                    case 6: {
+                        clear_screen();
+                        printf("Container ID: ");
+                        fflush(stdout);
+                        char id[256];
+                        if (fgets(id, sizeof(id), stdin)) {
+                            size_t len = strlen(id);
+                            if (len > 0 && id[len-1] == '\n') {
+                                id[len-1] = '\0';
+                            }
+                            char* argv[] = {"info", id, nullptr};
+                            handle_info(2, argv);
+                            printf("\nPress Enter to continue...");
+                            getchar();
+                        }
+                        break;
+                    }
+                    case 7:
+                        clear_screen();
+                        run_tests();
+                        break;
+                    case 0:
+                        running = false;
+                        break;
+                    default:
+                        // Invalid option, just continue
+                        break;
+                }
+                
+                // Restore non-blocking mode
+                tcsetattr(STDIN_FILENO, TCSANOW, &new_term);
+                hide_cursor();
+            }
+        } else if (select_result == 0) {
+            // Timeout (1 second) - refresh screen automatically
+            // Continue loop to refresh
         }
         
-        int option = atoi(choice);
+        // No additional delay needed - select timeout handles it
+    }
+    
+    // Restore terminal settings
+    tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
+    show_cursor();
+}
         
         switch (option) {
             case 1:
