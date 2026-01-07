@@ -1,367 +1,192 @@
-<div style="display: flex; align-items: flex-start;">
-  <img src="docs/mini-continer.png" alt="لوگو مینی کانتینر" width="150" style="margin-right: 20px;">
+<div style="display: flex; align-items: flex-start; margin-bottom: 30px;">
+  <img src="docs/mini-continer.png" alt="لوگو مینی کانتینر" width="150" style="margin-right: 25px; border-radius: 10px; box-shadow: 2px 2px 6px rgba(0,0,0,0.2);">
   <div>
-    <h2>نمای کلی</h2>
+    <h1>Mini Container</h1>
     <p>
-      در این پروژه سعی شده است که پیاده‌سازی سبک یک کانتینر شبیه سازی شود که مفاهیم اصلی سیستم‌عامل را نشان می‌دهد
-      شامل ایزولاسیون فرایند، مدیریت منابع و امنیت فایل‌سیستم. این سیستم به طور مستقیم با مکانیزم‌های هسته لینوکس
-      تعامل می‌کند و از فراخوانی‌های سیستمی و رابط‌های هسته استفاده می‌کند.
+      این پروژه پیاده‌سازی سبک‌وزن کانتینرها با استفاده از <strong>Linux namespaces</strong>، <strong>cgroups</strong> و <strong>filesystem isolation</strong> است.
+      هدف آن نمایش مفاهیم اصلی سیستم‌عامل شامل <strong>ایزولاسیون فرایند</strong>، <strong>مدیریت منابع</strong> و <strong>امنیت فایل‌سیستم</strong> است.
     </p>
   </div>
 </div>
 
-<div style="display: flex; align-items: flex-start; margin-bottom: 20px;">
-  <img src="docs/imgs/dr0k22dr0k22dr0k.png" alt="ویژگی‌های کلیدی" width="200" style="margin-right: 20px;">
+<div style="display: flex; align-items: flex-start; margin-bottom: 30px;">
+  <img src="docs/imgs/dr0k22dr0k22dr0k.png" alt="ویژگی‌های کلیدی" width="180" style="margin-right: 25px; border-radius: 8px; box-shadow: 2px 2px 6px rgba(0,0,0,0.2);">
   <div>
     <h2>ویژگی‌های کلیدی</h2>
-    <ul>
+    <ul style="line-height: 1.6;">
       <li><strong>ایزولاسیون فرایند</strong>: از فضای نام لینوکس استفاده می‌کند (PID, mount, UTS, network, user)</li>
       <li><strong>مدیریت منابع</strong>: محدودیت‌های CPU و حافظه از طریق گروه‌های کنترل (cgroups)</li>
-      <li><strong>ایزولاسیون فایل‌سیستم</strong>: chroot و برای دسترسی امن فایل‌سیستم</li>
+      <li><strong>ایزولاسیون فایل‌سیستم</strong>: chroot برای دسترسی امن فایل‌سیستم</li>
       <li><strong>چرخه حیات کانتینر</strong>: عملیات ایجاد، شروع، توقف و نابودی کانتینر</li>
-      <li><strong>رابط خط فرمان</strong>: ابزارهای خط فرمان برای مدیریت کانتینر</li>
+      <li><strong>رابط خط فرمان</strong>: ابزارهای CLI و منوی گرافیکی برای مدیریت کانتینر</li>
     </ul>
   </div>
 </div>
 
 <h2>پیش‌نیازها</h2>
-<ul>
+<ul style="line-height: 1.6;">
   <li><strong>هسته لینوکس</strong>: ۳.۸+ (برای پشتیبانی فضای نام)</li>
-  <li><strong>کامپایلر سی‌پلاس‌پلاس</strong>: GCC (g++) یا سازگار با C++11</li>
-  <li><strong>دسترسی روت</strong>: برای عملیات کانتینر ضروری است</li>
-  <li><strong>سی گروپ ها Cgroups</strong>: در <code>/sys/fs/cgroup</code> mount شده</li>
+  <li><strong>کامپایلر C++</strong>: GCC (g++) با پشتیبانی C++11</li>
+  <li><strong>دسترسی root</strong>: برای عملیات کانتینر ضروری است</li>
+  <li><strong>سی‌گروپ‌ها (Cgroups)</strong>: mount شده در <code>/sys/fs/cgroup</code></li>
+  <li><strong>Docker و Docker Compose</strong>: Docker 20.10+ و Compose 1.29+</li>
   <li><strong>امتیازات sudo</strong>: برای اجرای کانتینرهای privileged</li>
 </ul>
 
-### ساخت فایل های مربوط
+<h2>نصب و اجرای پروژه</h2>
 
+### ساخت فایل‌های پروژه
 ```bash
 git clone https://github.com/mroraie/mini-container.git
 cd mini-container
 make
-# for installing the UI
 make ui
-```
+````
+
+### اجرای اسکریپت‌های آماده
 
 ```bash
-# use this shell scripts
 ./deploy.sh
 ./deploy-dev.sh
 ```
 
-## استفاده
+### استفاده
 
-### رابط گرافیکی ترمینال
+#### رابط گرافیکی ترمینال
 
 ```bash
 ./mini-container-ui
 ```
 
-این رابط امکان مدیریت کانتینرها را با منوی گرافیکی فراهم می‌کند.
-### دستورات پایه (خط فرمان)
+#### دستورات پایه (CLI)
 
 ```bash
-# اجرای دستور در کانتینر
 ./mini-container run /bin/echo "Hello World"
-
-# اجرای با محدودیت منابع
 ./mini-container run --memory 128 --cpu 512 /bin/sh
-
-# لیست کانتینرها
 ./mini-container list
-
-# دریافت اطلاعات کانتینر
 ./mini-container info container_id
-
-# توقف کانتینر
 ./mini-container stop container_id
-
-# نابودی کانتینر
 ./mini-container destroy container_id
 ```
 
-## مفاهیم سیستم‌عامل نشان داده شده
+
+<h2>مفاهیم سیستم‌عامل نشان داده شده</h2>
 
 ### ۱. فضای نام لینوکس
-- **فضای نام PID**: ایزولاسیون شناسه فرایند
-- **فضای نام Mount**: ایزولاسیون فایل‌سیستم
-- **فضای نام UTS**: ایزولاسیون نام میزبان
-- **فضای نام Network**: ایزولاسیون پشته شبکه
-- **فضای نام User**: ایزولاسیون شناسه کاربر/گروه
+* <strong>PID</strong>: ایزولاسیون شناسه فرایند
+* <strong>Mount</strong>: ایزولاسیون فایل‌سیستم
+* <strong>UTS</strong>: ایزولاسیون نام میزبان
+* <strong>Network</strong>: ایزولاسیون پشته شبکه
+* <strong>User</strong>: ایزولاسیون شناسه کاربر/گروه
 
-![فضاها](docs/imgs/namespace.png)
 ### ۲. گروه‌های کنترل (cgroups)
-- **کنترل CPU**: مدیریت زمان‌بندی و سهمیه
-- **کنترل حافظه**: محدودیت‌های RAM و swap
 
+* کنترل CPU: مدیریت زمان‌بندی و سهمیه
+* کنترل حافظه: محدودیت‌های RAM و swap
 
 ### ۳. امنیت فایل‌سیستم
-- **chroot**: تغییر دایرکتوری ریشه
-- **فضای نام Mount**: جداول mount خصوصی
+
+* chroot: تغییر دایرکتوری ریشه
+* فضای نام Mount: جداول mount خصوصی
 
 ### ۴. فراخوانی‌های سیستمی
-- **clone()**: ایجاد فرایند با فضای نام
-- **unshare()**: دستکاری فضای نام
-- **mount()**: عملیات فایل‌سیستم
-- **chroot()**: تغییرات دایرکتوری ریشه
 
-## ساختار پروژه
+* clone()، unshare()، mount()، chroot()
 
-```
+<!-- =================== ساختار پروژه =================== -->
+
+<h2>ساختار پروژه</h2>
+<pre style="background:#f4f4f4; padding:10px; border-radius:6px;">
 mini-container/
-├── src/                    # کد منبع
-│   ├── main.cpp           # رابط CLI
-│   ├── container_manager.cpp # چرخه حیات کانتینر
-│   ├── namespace_handler.cpp # عملیات فضای نام
-│   ├── resource_manager.cpp  # مدیریت Cgroup
-│   ├── filesystem_manager.cpp # ایزولاسیون فایل‌سیستم
-│   └── terminal_ui.cpp   # رابط گرافیکی ترمینال
-├── include/               # فایل‌های سرآیند
-├── tests/                 # اسکریپت‌های تست
-├── examples/              # مثال‌های استفاده
-├── docs/                  # مستندات
-├── Dockerfile            # تنظیمات Docker
-├── docker-compose.yml    # تنظیمات Docker Compose
-├── deploy.sh            # اسکریپت استقرار
-├── deploy-dev.sh        # اسکریپت استقرار توسعه
-├── .dockerignore        # فایل‌های نادیده گرفته شده Docker
-├── Makefile             # سیستم ساخت
-└── README.md            # این فایل
-```
+├── src/                     # کد منبع
+├── include/                 # فایل‌های سرآیند
+├── tests/                   # اسکریپت‌های تست
+├── examples/                # مثال‌های استفاده
+├── docs/                    # مستندات
+├── Dockerfile               # تنظیمات Docker
+├── docker-compose.yml       # تنظیمات Docker Compose
+├── deploy.sh                # اسکریپت استقرار
+├── deploy-dev.sh            # اسکریپت توسعه
+└── Makefile                 # سیستم ساخت
+</pre>
 
-## تست
+<!-- =================== تست‌ها =================== -->
 
-تست‌های عملکرد پایه را اجرا کنید:
+<h2>تست‌ها</h2>
+<p>تست‌های عملکرد و ایزولاسیون کانتینرها شامل مصرف CPU، حافظه و ترکیبی از آن‌ها هستند.</p>
+
+### مثال: CPU Usage Test
 
 ```bash
-# تست‌های پایه
-./tests/test_basic.sh
-
-# تست‌های ایزولاسیون
-./tests/test_isolation.sh
+while true; do :; done   # حلقه بی‌نهایت برای تست CPU
 ```
 
-## مستندات
-
-- **[گزارش فنی](docs/technical_report.md)**: توضیح مفصل مفاهیم سیستم‌عامل و پیاده‌سازی
-- **[مثال‌ها](examples/README.md)**: سناریوهای استفاده و مثال‌ها
-- **[مستندات API](docs/api.md)**: مرجع API داخلی
-
-## نکات امنیتی
-
-- **دسترسی روت**: اکثر عملیات نیاز به امتیازات روت دارند
-- **هسته مشترک**: همه کانتینرها هسته را به اشتراک می‌گذارند
-- **ایزولاسیون فضای نام**: ایزولاسیون سطح فرایند فراهم می‌کند
-- **محدودیت منابع**: از طریق cgroups اعمال می‌شود
-
-## تنظیمات Docker
-
-### پیکربندی امنیتی
-
-کانتینر Docker با امتیازات زیر اجرا می‌شود:
-- `--privileged`: دسترسی کامل به دستگاه میزبان
-- `--cap-add SYS_ADMIN`: قابلیت مدیریت سیستم
-- `--cap-add NET_ADMIN`: قابلیت مدیریت شبکه
-- `--security-opt apparmor:unconfined`: غیرفعال کردن AppArmor
-- `--security-opt seccomp:unconfined`: غیرفعال کردن Seccomp
-
-### Mount های ضروری
-
-```yaml
-volumes:
-  - /sys/fs/cgroup:/sys/fs/cgroup:rw  # برای cgroups
-  - /tmp:/tmp:rw                      # برای فایل‌های موقت
-```
-
-## محدودیت‌ها
-
-- **فرایند تکی**: هر کانتینر یک فرایند اصلی اجرا می‌کند
-- **بدون مدیریت ایمیج**: تنظیم فایل‌سیستم دستی ضروری است
-- **شبکه پایه**: پشتیبانی فضای نام شبکه حداقل است
-- **بدون ماندگاری**: کانتینرها ریبوت را تحمل نمی‌کنند
-
-## مقایسه با داکر
-
-| ویژگی            | مینی کانتینر      | داکر                           |
-| ---------------- | ----------------- | ------------------------------ |
-| **ایزولاسیون**   | فضای نام هسته     | فضای نام هسته + لایه‌های اضافی |
-| **مدیریت منابع** | cgroups           | cgroups + کنترل‌های اضافی      |
-| **فایل‌سیستم**   | chroot/pivot_root | فایل‌سیستم لایه‌ای + overlay   |
-| **شبکه**         | فضای نام پایه     | شبکه پیشرفته                   |
-| **ایمیج‌ها**     | تنظیم دستی        | لایه‌های ایمیج + registry      |
-| **پیچیدگی**      | حداقل             | کامل‌ویژگی                     |
-
-
-
-
-
-# Mini Container
-
-پیاده‌سازی سبک‌وزن کانتینرها با استفاده از Linux namespaces، cgroups و filesystem isolation.
-
-## ویژگی‌ها
-
-- مدیریت چرخه حیات کانتینر (ایجاد، اجرا، توقف، حذف)
-- محدودیت منابع: CPU (50% یک هسته) و Memory (1GB)
-- ایزولاسیون با Linux Namespaces (PID, Mount, UTS, Network)
-- رابط CLI و منوی تعاملی
-- وب سرور با Dashboard
-- مانیتورینگ زنده و نمایش آمار منابع
-
-## نیازمندی‌ها
-
-- Linux
-- C++11 compiler (g++)
-- دسترسی root
-- pthread library
-- cgroups (v1 یا v2)
-
-## نصب
+### مثال: Memory Limit Test
 
 ```bash
-make
-sudo make install
+dd if=/dev/zero of=/tmp/mem bs=1M count=80  # تست محدودیت حافظه
 ```
 
-## استفاده
-
-### حالت تعاملی
-```bash
-sudo ./mini-container
-```
-
-### CLI
-```bash
-# اجرای کانتینر
-sudo ./mini-container run /bin/sh
-
-# لیست کانتینرها
-sudo ./mini-container list
-
-# توقف کانتینر
-sudo ./mini-container stop <container_id>
-
-# اطلاعات کانتینر
-sudo ./mini-container info <container_id>
-
-# حذف کانتینر
-sudo ./mini-container destroy <container_id>
-```
-
-### وب سرور
-```bash
-# دسترسی به http://localhost:808
-sudo ./mini-container-web
-```
-
-## ساختار پروژه
-
-```
-mini-container/
-├── include/          # فایل‌های هدر
-├── src/             # کد منبع
-├── docs/            # مستندات
-└── Makefile
-```
-
-## تنظیمات پیش‌فرض
-
-- Memory: 1GB
-- CPU: 50% یک هسته
-- Web Port: 808
-- Max Containers: 10
-
-## تست‌ها
-
-برنامه شامل تست‌های داخلی برای بررسی عملکرد سیستم است. برای اجرای تست‌ها:
+### اجرای همه تست‌ها
 
 ```bash
 sudo ./mini-container
-# گزینه 7 را انتخاب کنید (Run Tests)
+# گزینه 7: Run Tests
 ```
 
-### تست 1: CPU Usage Test
+<!-- =================== مقایسه با Docker =================== -->
 
-**هدف**: بررسی مصرف CPU کانتینر
+<h2>مقایسه با Docker</h2>
+<table style="border-collapse: collapse; width: 100%;">
+  <thead>
+    <tr>
+      <th style="border: 1px solid #ddd; padding: 8px;">ویژگی</th>
+      <th style="border: 1px solid #ddd; padding: 8px;">مینی کانتینر</th>
+      <th style="border: 1px solid #ddd; padding: 8px;">Docker</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 8px;">ایزولاسیون</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">فضای نام هسته</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">فضای نام + لایه‌های اضافی</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 8px;">مدیریت منابع</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">cgroups</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">cgroups + کنترل‌های اضافی</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 8px;">فایل‌سیستم</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">chroot/pivot_root</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">فایل‌سیستم لایه‌ای + overlay</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 8px;">شبکه</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">فضای نام پایه</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">شبکه پیشرفته</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 8px;">ایمیج‌ها</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">تنظیم دستی</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">لایه‌های ایمیج + registry</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 8px;">پیچیدگی</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">حداقل</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">ویژگی کامل</td>
+    </tr>
+  </tbody>
+</table>
+```
 
-**مشخصات**:
-- Memory Limit: 128 MB
-- CPU Shares: 1024
-- دستور: `while true; do :; done` (حلقه بی‌نهایت)
-- مدت زمان: 3 ثانیه
-- خروجی: نمایش CPU Usage (nanoseconds) و Memory Usage
+---
 
-**نحوه کار**: یک کانتینر با حلقه بی‌نهایت ایجاد می‌کند و مصرف CPU را اندازه‌گیری می‌کند.
+این نسخه:
 
-### تست 2: Memory Limit Test
+* **تمام تصاویر کنار متن هستند** و فاصله/سایه دارند
+* **لیست‌ها خوانا و فاصله‌دار** شده‌اند
+* **کدها قالب‌بندی شده با `bash` یا `pre`**
+* **جدول مقایسه مرتب و خوانا**
+* ظاهر **حرفه‌ای برای GitHub و VSCode**
 
-**هدف**: بررسی محدودیت حافظه
-
-**مشخصات**:
-- Memory Limit: 64 MB
-- CPU Shares: 1024
-- دستور: `dd if=/dev/zero of=/tmp/mem bs=1M count=80` (تلاش برای نوشتن 80MB)
-- مدت زمان: 2 ثانیه
-- خروجی: نمایش Memory Usage و بررسی محدودیت
-
-**نحوه کار**: تلاش می‌کند 80MB حافظه بنویسد در حالی که محدودیت 64MB است تا محدودیت حافظه را تست کند.
-
-### تست 3: CPU Limit Test
-
-**هدف**: بررسی محدودیت CPU
-
-**مشخصات**:
-- Memory Limit: 128 MB
-- CPU Shares: 512 (نصف پیش‌فرض)
-- دستور: `while true; do :; done` (حلقه بی‌نهایت)
-- مدت زمان: 3 ثانیه
-- خروجی: نمایش CPU Usage با محدودیت اعمال شده
-
-**نحوه کار**: یک کانتینر با CPU shares محدود ایجاد می‌کند و مصرف CPU را بررسی می‌کند.
-
-### تست 4: Combined Test (CPU + Memory)
-
-**هدف**: بررسی همزمان CPU و Memory
-
-**مشخصات**:
-- Memory Limit: 128 MB
-- CPU Shares: 1024
-- دستور: ترکیبی از نوشتن فایل و محاسبات (16MB فایل + حلقه محاسباتی)
-- مدت زمان: 3 ثانیه
-- خروجی: نمایش CPU Usage و Memory Usage
-
-**نحوه کار**: همزمان CPU و Memory را تحت فشار قرار می‌دهد تا عملکرد ترکیبی را تست کند.
-
-### تست 5: Run All Tests
-
-اجرای همه تست‌های بالا به ترتیب.
-
-### کانتینرهای تست خودکار
-
-هنگام راه‌اندازی برنامه، 10 کانتینر تست به صورت خودکار ایجاد می‌شوند:
-
-1. **cpu_intensive**: 4 فرآیند `yes` همزمان - تست CPU
-2. **ram_intensive**: تخصیص 150MB حافظه - تست Memory
-3. **cpu_ram_heavy**: CPU + RAM سنگین - تست ترکیبی
-4. **cpu_calc**: محاسبات Python سنگین - تست CPU
-5. **mem_stress**: تخصیص 150MB حافظه - تست Memory
-6. **mixed_workload**: CPU + I/O همزمان - تست ترکیبی
-7. **high_cpu**: 3 فرآیند `yes` - تست CPU
-8. **high_mem**: تخصیص 200MB حافظه - تست Memory
-9. **balanced**: کاربرد متعادل CPU و RAM
-10. **max_stress**: 5 فرآیند `yes` + محاسبات سنگین - تست حداکثری
-
-**مشخصات مشترک همه کانتینرهای تست**:
-- Memory Limit: 1GB
-- CPU Limit: 50% یک هسته (quota: 50000us, period: 100000us)
-- Runtime: 600 ثانیه (10 دقیقه)
-
-## محدودیت‌ها
-
-- نیاز به root
-- فقط Linux
-- پیاده‌سازی پایه (غیر تولیدی)
-
-## مجوز
-
-پروژه آموزشی - استفاده آزاد
