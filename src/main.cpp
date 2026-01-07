@@ -231,8 +231,8 @@ static int handle_stop(int argc, char *argv[])
 
 static int handle_list(int argc, char *argv[])
 {
-    (void)argc;  // Suppress unused parameter warning
-    (void)argv;  // Suppress unused parameter warning
+    (void)argc;
+    (void)argv;
     int count;
     container_info_t **containers = container_manager_list(&cm, &count);
 
@@ -652,7 +652,6 @@ void display_monitor() {
     clear_screen();
 }
 
-// Interactive container creation
 void interactive_create_container() {
     clear_screen();
     set_color(COLOR_BOLD);
@@ -812,7 +811,6 @@ void interactive_create_container() {
     getchar();
 }
 
-// Run tests
 void run_tests() {
     clear_screen();
     set_color(COLOR_BOLD);
@@ -849,7 +847,6 @@ void run_tests() {
     vector<char*> args;
     
     if (test_num == 1 || test_num == 5) {
-        // CPU test
         printf("\n[Test 1] CPU Usage Test...\n");
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
@@ -886,7 +883,6 @@ void run_tests() {
     }
     
     if (test_num == 2 || test_num == 5) {
-        // Memory test
         printf("\n[Test 2] Memory Limit Test...\n");
         snprintf(container_id, sizeof(container_id), "test_mem_%ld", time(nullptr));
         config.id = container_id;
@@ -924,7 +920,6 @@ void run_tests() {
     }
     
     if (test_num == 3 || test_num == 5) {
-        // CPU limit test
         printf("\n[Test 3] CPU Limit Test...\n");
         snprintf(container_id, sizeof(container_id), "test_cpu_limit_%ld", time(nullptr));
         config.id = container_id;
@@ -962,7 +957,6 @@ void run_tests() {
     }
     
     if (test_num == 4 || test_num == 5) {
-        // Combined test
         printf("\n[Test 4] Combined Test (CPU + Memory)...\n");
         snprintf(container_id, sizeof(container_id), "test_combined_%ld", time(nullptr));
         config.id = container_id;
@@ -1004,21 +998,15 @@ void run_tests() {
     getchar();
 }
 
-// Initialize 10 containers with different resource consumption patterns
 void init_containers() {
-    // printf("Initializing 10 containers with different resource patterns...\n");
-    
     time_t base_time = time(nullptr);
     int counter = 0;
-    const int runtime_seconds = 600;  // 10 minutes
+    const int runtime_seconds = 600;
     char cmd_buffer[512];
     
-    // Common resource limits: 1GB RAM, 50% of one Pentium core
-    const unsigned long memory_limit = 1024 * 1024 * 1024;  // 1 GB
-    const int cpu_quota_us = 50000;  // 50% of one core (50000/100000 = 0.5)
-    const int cpu_period_us = 100000;  // 100ms period
-    
-    // Container 1: CPU intensive - multiple CPU-bound processes
+    const unsigned long memory_limit = 1024 * 1024 * 1024;
+    const int cpu_quota_us = 50000;
+    const int cpu_period_us = 100000;
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
@@ -1028,10 +1016,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "cpu_intensive_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
-        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.memory.limit_bytes = memory_limit;
+        config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
-        config.res_limits.cpu.shares = 512;  // CPU shares
+        config.res_limits.cpu.shares = 512;
         config.ns_config.hostname = strdup("cpu-intensive");
         config.fs_config.root_path = strdup("/");
         
@@ -1044,9 +1032,7 @@ void init_containers() {
         config.command = args.data();
         config.command_argc = 3;
         
-        if (container_manager_run(&cm, &config) == 0) {
-            // printf("  ✓ Container 1 (CPU intensive) started: %s\n", container_id);
-        }
+        container_manager_run(&cm, &config);
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
@@ -1054,7 +1040,6 @@ void init_containers() {
         free(config.fs_config.root_path);
     }
     
-    // Container 2: RAM intensive - large memory allocation
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
@@ -1064,10 +1049,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "ram_intensive_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
-        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.memory.limit_bytes = memory_limit;
+        config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
-        config.res_limits.cpu.shares = 512;  // CPU shares
+        config.res_limits.cpu.shares = 512;
         config.ns_config.hostname = strdup("ram-intensive");
         config.fs_config.root_path = strdup("/");
         
@@ -1090,7 +1075,6 @@ void init_containers() {
         free(config.fs_config.root_path);
     }
     
-    // Container 3: CPU + RAM both - heavy computation
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
@@ -1100,10 +1084,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "cpu_ram_heavy_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
-        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.memory.limit_bytes = memory_limit;
+        config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
-        config.res_limits.cpu.shares = 512;  // CPU shares
+        config.res_limits.cpu.shares = 512;
         config.ns_config.hostname = strdup("cpu-ram-heavy");
         config.fs_config.root_path = strdup("/");
         
@@ -1126,7 +1110,6 @@ void init_containers() {
         free(config.fs_config.root_path);
     }
     
-    // Container 4: CPU calculation intensive
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
@@ -1136,10 +1119,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "cpu_calc_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
-        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.memory.limit_bytes = memory_limit;
+        config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
-        config.res_limits.cpu.shares = 512;  // CPU shares
+        config.res_limits.cpu.shares = 512;
         config.ns_config.hostname = strdup("cpu-calc");
         config.fs_config.root_path = strdup("/");
         
@@ -1162,7 +1145,6 @@ void init_containers() {
         free(config.fs_config.root_path);
     }
     
-    // Container 5: Memory stress test
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
@@ -1172,10 +1154,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "mem_stress_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
-        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.memory.limit_bytes = memory_limit;
+        config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
-        config.res_limits.cpu.shares = 512;  // CPU shares
+        config.res_limits.cpu.shares = 512;
         config.ns_config.hostname = strdup("mem-stress");
         config.fs_config.root_path = strdup("/");
         
@@ -1198,7 +1180,6 @@ void init_containers() {
         free(config.fs_config.root_path);
     }
     
-    // Container 6: Mixed workload - CPU and I/O
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
@@ -1208,10 +1189,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "mixed_workload_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
-        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.memory.limit_bytes = memory_limit;
+        config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
-        config.res_limits.cpu.shares = 512;  // CPU shares
+        config.res_limits.cpu.shares = 512;
         config.ns_config.hostname = strdup("mixed-workload");
         config.fs_config.root_path = strdup("/");
         
@@ -1234,7 +1215,6 @@ void init_containers() {
         free(config.fs_config.root_path);
     }
     
-    // Container 7: High CPU, low memory
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
@@ -1244,10 +1224,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "high_cpu_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
-        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.memory.limit_bytes = memory_limit;
+        config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
-        config.res_limits.cpu.shares = 512;  // CPU shares
+        config.res_limits.cpu.shares = 512;
         config.ns_config.hostname = strdup("high-cpu");
         config.fs_config.root_path = strdup("/");
         
@@ -1270,7 +1250,6 @@ void init_containers() {
         free(config.fs_config.root_path);
     }
     
-    // Container 8: High memory, low CPU
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
@@ -1280,10 +1259,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "high_mem_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
-        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.memory.limit_bytes = memory_limit;
+        config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
-        config.res_limits.cpu.shares = 512;  // CPU shares
+        config.res_limits.cpu.shares = 512;
         config.ns_config.hostname = strdup("high-mem");
         config.fs_config.root_path = strdup("/");
         
@@ -1306,7 +1285,6 @@ void init_containers() {
         free(config.fs_config.root_path);
     }
     
-    // Container 9: Balanced workload
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
@@ -1316,10 +1294,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "balanced_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
-        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.memory.limit_bytes = memory_limit;
+        config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
-        config.res_limits.cpu.shares = 512;  // CPU shares
+        config.res_limits.cpu.shares = 512;
         config.ns_config.hostname = strdup("balanced");
         config.fs_config.root_path = strdup("/");
         
@@ -1342,7 +1320,6 @@ void init_containers() {
         free(config.fs_config.root_path);
     }
     
-    // Container 10: Maximum stress - both CPU and RAM
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
@@ -1352,10 +1329,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "max_stress_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
-        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.memory.limit_bytes = memory_limit;
+        config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
-        config.res_limits.cpu.shares = 512;  // CPU shares
+        config.res_limits.cpu.shares = 512;
         config.ns_config.hostname = strdup("max-stress");
         config.fs_config.root_path = strdup("/");
         
@@ -1378,22 +1355,18 @@ void init_containers() {
         free(config.fs_config.root_path);
     }
     
-    // printf("Container initialization complete!\n\n");
 }
 
-// Signal handler
 void signal_handler(int signum) {
     (void)signum;
     running = false;
     monitor_mode = false;
     show_cursor();
     
-    // Stop all containers first - kill all processes in cgroups
     int count;
     container_info_t** containers = container_manager_list(&cm, &count);
     for (int i = 0; i < count; i++) {
         if (containers[i]->state == CONTAINER_RUNNING) {
-            // Kill all processes in the container's cgroup
             char cgroup_procs_path[512];
             if (cm.rm->version == CGROUP_V2) {
                 snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
@@ -1414,15 +1387,12 @@ void signal_handler(int signum) {
                 fclose(fp);
             }
             
-            // Also stop via container manager
             container_manager_stop(&cm, containers[i]->id);
         }
     }
     
-    // Wait a bit for all processes to terminate
     sleep(2);
     
-    // Force kill any remaining processes in cgroups
     for (int i = 0; i < count; i++) {
         char cgroup_procs_path[512];
         if (cm.rm->version == CGROUP_V2) {
@@ -1445,24 +1415,86 @@ void signal_handler(int signum) {
         }
     }
     
-    // Stop web server
     if (web_server) {
         web_server->stop();
         delete web_server;
         web_server = nullptr;
     }
     
-    // Cleanup container manager
     container_manager_cleanup(&cm);
     
     exit(0);
 }
 
-// Interactive menu with live monitor
-void interactive_menu() {
-    // Signal handlers already set in main()
+void signal_handler(int signum) {
+    (void)signum;
+    running = false;
+    monitor_mode = false;
+    show_cursor();
     
-    // Set terminal to non-canonical mode for non-blocking input
+    int count;
+    container_info_t** containers = container_manager_list(&cm, &count);
+    for (int i = 0; i < count; i++) {
+        if (containers[i]->state == CONTAINER_RUNNING) {
+            char cgroup_procs_path[512];
+            if (cm.rm->version == CGROUP_V2) {
+                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                         "/sys/fs/cgroup/%s_%s/cgroup.procs", cm.rm->cgroup_path, containers[i]->id);
+            } else {
+                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                         "/sys/fs/cgroup/cpu,cpuacct/%s_%s/tasks", cm.rm->cgroup_path, containers[i]->id);
+            }
+            
+            FILE *fp = fopen(cgroup_procs_path, "r");
+            if (fp) {
+                pid_t pid;
+                while (fscanf(fp, "%d", &pid) == 1) {
+                    if (pid > 0) {
+                        kill(pid, SIGKILL);
+                    }
+                }
+                fclose(fp);
+            }
+            
+            container_manager_stop(&cm, containers[i]->id);
+        }
+    }
+    
+    sleep(2);
+    for (int i = 0; i < count; i++) {
+        char cgroup_procs_path[512];
+        if (cm.rm->version == CGROUP_V2) {
+            snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                     "/sys/fs/cgroup/%s_%s/cgroup.procs", cm.rm->cgroup_path, containers[i]->id);
+        } else {
+            snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                     "/sys/fs/cgroup/cpu,cpuacct/%s_%s/tasks", cm.rm->cgroup_path, containers[i]->id);
+        }
+        
+        FILE *fp = fopen(cgroup_procs_path, "r");
+        if (fp) {
+            pid_t pid;
+            while (fscanf(fp, "%d", &pid) == 1) {
+                if (pid > 0) {
+                    kill(pid, SIGKILL);
+                }
+            }
+            fclose(fp);
+        }
+    }
+    
+    if (web_server) {
+        web_server->stop();
+        delete web_server;
+        web_server = nullptr;
+    }
+    
+    container_manager_cleanup(&cm);
+    
+    exit(0);
+}
+
+void interactive_menu() {
     struct termios old_term, new_term;
     tcgetattr(STDIN_FILENO, &old_term);
     new_term = old_term;
@@ -1475,10 +1507,7 @@ void interactive_menu() {
     while (running) {
         clear_screen();
         
-        // Display live monitor at top
         display_compact_monitor();
-        
-        // Display menu at bottom
         printf("╔══════════════════════════════════════════════════════════════════════════════╗\n");
         set_color(COLOR_BOLD);
         set_color(COLOR_CYAN);
@@ -1495,7 +1524,6 @@ void interactive_menu() {
         reset_color();
         fflush(stdout);
         
-        // Check for input (non-blocking)
         tcsetattr(STDIN_FILENO, TCSANOW, &new_term);
         
         char choice = 0;
@@ -1511,14 +1539,10 @@ void interactive_menu() {
         
         if (select_result > 0 && FD_ISSET(STDIN_FILENO, &readfds)) {
             if (read(STDIN_FILENO, &choice, 1) > 0) {
-                // User pressed a key
                 int option = choice - '0';
                 
-                // Restore terminal settings for blocking input
                 tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
                 show_cursor();
-                
-                // Handle menu option
                 switch (option) {
                     case 1:
                         clear_screen();
@@ -1597,23 +1621,15 @@ void interactive_menu() {
                         running = false;
                         break;
                     default:
-                        // Invalid option, just continue
                         break;
                 }
                 
-                // Restore non-blocking mode
                 tcsetattr(STDIN_FILENO, TCSANOW, &new_term);
                 hide_cursor();
             }
-        } else if (select_result == 0) {
-            // Timeout (5 seconds) - refresh screen automatically
-            // Continue loop to refresh
         }
-        
-        // No additional delay needed - select timeout handles it
     }
     
-    // Restore terminal settings
     tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
     show_cursor();
 }
@@ -1631,7 +1647,6 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Warning: container operations typically require root privileges\n");
     }
 
-    // Initialize 5 containers with different resource patterns
     init_containers();
 
     // Start web server automatically
@@ -1639,8 +1654,6 @@ int main(int argc, char *argv[])
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     web_server->start();
-    // printf("Web server started on port 808\n");
-    // printf("Open http://localhost:808 in your browser\n");
 
     // If no arguments, run interactive menu
     if (argc < 2)
@@ -1709,8 +1722,6 @@ int main(int argc, char *argv[])
         result = EXIT_FAILURE;
     }
 
-    // Stop web server before cleanup (only for commands that exit immediately)
-    // For 'run' command, web server is kept running until Ctrl+C (handled in signal handler)
     if (strcmp(command, "run") != 0) {
         if (web_server) {
             web_server->stop();
@@ -1719,7 +1730,6 @@ int main(int argc, char *argv[])
         }
         container_manager_cleanup(&cm);
     }
-    // For 'run' command, cleanup is done in signal handler when Ctrl+C is pressed
     
     return result;
 }
