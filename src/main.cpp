@@ -1098,9 +1098,7 @@ void init_containers() {
         config.command = args.data();
         config.command_argc = 3;
         
-        if (container_manager_run(&cm, &config) == 0) {
-            // printf("  ✓ Container 3 (CPU + RAM heavy) started: %s\n", container_id);
-        }
+        container_manager_run(&cm, &config);
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
@@ -1133,9 +1131,7 @@ void init_containers() {
         config.command = args.data();
         config.command_argc = 3;
         
-        if (container_manager_run(&cm, &config) == 0) {
-            // printf("  ✓ Container 4 (CPU calc) started: %s\n", container_id);
-        }
+        container_manager_run(&cm, &config);
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
@@ -1168,9 +1164,7 @@ void init_containers() {
         config.command = args.data();
         config.command_argc = 3;
         
-        if (container_manager_run(&cm, &config) == 0) {
-            // printf("  ✓ Container 5 (Memory stress) started: %s\n", container_id);
-        }
+        container_manager_run(&cm, &config);
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
@@ -1203,9 +1197,7 @@ void init_containers() {
         config.command = args.data();
         config.command_argc = 3;
         
-        if (container_manager_run(&cm, &config) == 0) {
-            // printf("  ✓ Container 6 (Mixed workload) started: %s\n", container_id);
-        }
+        container_manager_run(&cm, &config);
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
@@ -1238,9 +1230,7 @@ void init_containers() {
         config.command = args.data();
         config.command_argc = 3;
         
-        if (container_manager_run(&cm, &config) == 0) {
-            // printf("  ✓ Container 7 (High CPU) started: %s\n", container_id);
-        }
+        container_manager_run(&cm, &config);
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
@@ -1273,9 +1263,7 @@ void init_containers() {
         config.command = args.data();
         config.command_argc = 3;
         
-        if (container_manager_run(&cm, &config) == 0) {
-            // printf("  ✓ Container 8 (High memory) started: %s\n", container_id);
-        }
+        container_manager_run(&cm, &config);
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
@@ -1308,9 +1296,7 @@ void init_containers() {
         config.command = args.data();
         config.command_argc = 3;
         
-        if (container_manager_run(&cm, &config) == 0) {
-            // printf("  ✓ Container 9 (Balanced) started: %s\n", container_id);
-        }
+        container_manager_run(&cm, &config);
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
@@ -1343,9 +1329,7 @@ void init_containers() {
         config.command = args.data();
         config.command_argc = 3;
         
-        if (container_manager_run(&cm, &config) == 0) {
-            // printf("  ✓ Container 10 (Max stress) started: %s\n", container_id);
-        }
+        container_manager_run(&cm, &config);
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
