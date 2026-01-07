@@ -66,34 +66,26 @@ static void remove_container(container_manager_t *cm, const char *container_id) 
     }
 }
 
-// Check if PID is still alive
 static int is_pid_alive(pid_t pid) {
     if (pid <= 0) return 0;
-    // Use kill(pid, 0) to check if process exists
-    // Returns 0 if process exists, -1 with errno=ESRCH if not
     if (kill(pid, 0) == 0) {
         return 1;
     }
-    return (errno == ESRCH) ? 0 : 1; // If errno is ESRCH, process doesn't exist
+    return (errno == ESRCH) ? 0 : 1;
 }
 
-// Get state file path (try /var/run first, fallback to /tmp)
 static const char* get_state_file_path() {
     struct stat st;
-    // Try /var/run/mini-container first
     if (stat("/var/run/mini-container", &st) == 0 || mkdir("/var/run/mini-container", 0755) == 0) {
         return STATE_FILE_PATH;
     }
-    // Fallback to /tmp
     return STATE_FILE_PATH_FALLBACK;
 }
 
-// Save container state to file
 static void save_state(container_manager_t *cm) {
     const char* state_file = get_state_file_path();
     FILE* fp = fopen(state_file, "w");
     if (!fp) {
-        // Silently fail - state persistence is optional
         return;
     }
 
@@ -118,17 +110,12 @@ static void save_state(container_manager_t *cm) {
     fclose(fp);
 }
 
-// Load container state from file
 static int load_state(container_manager_t *cm) {
     const char* state_file = get_state_file_path();
     FILE* fp = fopen(state_file, "r");
     if (!fp) {
-        // No state file exists yet - this is OK
         return 0;
     }
-
-    // Simple JSON parser (basic implementation)
-    // Read the file and parse container entries
     char line[1024];
     char container_id[256] = {0};
     pid_t pid = 0;

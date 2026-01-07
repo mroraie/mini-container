@@ -30,7 +30,6 @@ static const char *state_names[] = {
     [CONTAINER_STOPPED] = "STOPPED",
     [CONTAINER_DESTROYED] = "DESTROYED"};
 
-// Terminal control functions
 void clear_screen() {
     printf("\033[2J\033[H");
 }
@@ -51,7 +50,6 @@ void reset_color() {
     printf("\033[0m");
 }
 
-// Color codes
 const char* COLOR_GREEN = "\033[32m";
 const char* COLOR_RED = "\033[31m";
 const char* COLOR_YELLOW = "\033[33m";
@@ -151,10 +149,6 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
 
     if (!config->fs_config.root_path)
     {
-        // Use real root filesystem for demo purposes (better for university presentation)
-        // This allows /bin/sh and other binaries to work without creating minimal rootfs
-        // Note: For production/security, you should create a minimal rootfs with only
-        // necessary binaries. For educational demo, using / is acceptable and simpler.
         config->fs_config.root_path = strdup("/");
     }
 
@@ -171,8 +165,6 @@ static int handle_run(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    printf("Creating container...\n");
-
     if (container_manager_run(&cm, &config) != 0)
     {
         fprintf(stderr, "Failed to run container\n");
@@ -182,35 +174,18 @@ static int handle_run(int argc, char *argv[])
     container_info_t *info = container_manager_get_info(&cm, config.id);
     if (info)
     {
-        printf("Container %s started with PID %d\n", info->id, info->pid);
-
         if (detach)
         {
-            // Don't wait, just return
-            printf("Container running in background. Use 'stop %s' to stop it.\n", info->id);
-            printf("Web server is running on http://localhost:808\n");
-            printf("Press Ctrl+C to stop web server and exit\n");
-            
-            // Keep running to maintain web server
             while (running) {
                 sleep(1);
             }
         }
         else
         {
-            // Wait for container to finish
             if (info->pid > 0)
             {
-                printf("Container running. Web server available at http://localhost:808\n");
-                printf("Press Ctrl+C to stop container and exit\n");
-                
-                // Wait for container, but keep web server running
                 int status;
                 waitpid(info->pid, &status, 0);
-                printf("Container %s exited with status %d\n", info->id, WEXITSTATUS(status));
-                printf("Web server still running. Press Ctrl+C to exit\n");
-                
-                // Keep web server running until Ctrl+C
                 while (running) {
                     sleep(1);
                 }
@@ -379,7 +354,6 @@ static int handle_info(int argc, char *argv[])
     return EXIT_SUCCESS;
 }
 
-// Format bytes to human readable
 string format_bytes(unsigned long bytes) {
     const char* units[] = {"B", "KB", "MB", "GB"};
     int unit = 0;
@@ -395,7 +369,6 @@ string format_bytes(unsigned long bytes) {
     return string(buf);
 }
 
-// Format time duration
 string format_duration(time_t start, time_t end) {
     if (start == 0 || end == 0) return "--";
     long diff = end - start;
@@ -412,24 +385,20 @@ string format_duration(time_t start, time_t end) {
     return string(buf);
 }
 
-// Calculate CPU percentage (simplified)
 double calculate_cpu_percent(unsigned long cpu_ns, time_t start_time) {
     if (start_time == 0) return 0.0;
     time_t now = time(nullptr);
     long elapsed = now - start_time;
     if (elapsed <= 0) return 0.0;
     
-    // Convert nanoseconds to seconds and calculate percentage
     double cpu_seconds = cpu_ns / 1e9;
     return (cpu_seconds / elapsed) * 100.0;
 }
 
-// Display compact monitor (for main menu)
 void display_compact_monitor() {
     int count;
     container_info_t **containers = container_manager_list(&cm, &count);
     
-    // Stats bar
     int running_count = 0;
     for (int i = 0; i < count; i++) {
         if (containers[i]->state == CONTAINER_RUNNING) {
@@ -455,7 +424,6 @@ void display_compact_monitor() {
     printf("Time: %s\n", time_str);
     printf("───────────────────────────────────────────────────────────────────────────────\n");
     
-    // Table header
     set_color(COLOR_BOLD);
     printf("%-20s %-8s %-10s %-12s %-12s %-10s\n",
            "CONTAINER ID", "PID", "STATE", "CPU%", "MEMORY", "RUNTIME");
@@ -467,7 +435,6 @@ void display_compact_monitor() {
         printf("No containers running\n");
         reset_color();
     } else {
-        // Sort: running first
         vector<container_info_t*> sorted_containers;
         for (int i = 0; i < count; i++) {
             sorted_containers.push_back(containers[i]);
@@ -479,7 +446,6 @@ void display_compact_monitor() {
                  return a->started_at > b->started_at;
              });
         
-        // Show max 10 containers in compact view
         int max_display = (sorted_containers.size() > 10) ? 10 : sorted_containers.size();
         for (int i = 0; i < max_display; i++) {
             container_info_t* info = sorted_containers[i];
@@ -524,7 +490,6 @@ void display_compact_monitor() {
     printf("\n");
 }
 
-// Display htop-like monitor
 void display_monitor() {
     clear_screen();
     hide_cursor();
@@ -542,7 +507,6 @@ void display_monitor() {
         int count;
         container_info_t **containers = container_manager_list(&cm, &count);
         
-        // Stats bar
         int running_count = 0;
         for (int i = 0; i < count; i++) {
             if (containers[i]->state == CONTAINER_RUNNING) {
@@ -561,7 +525,6 @@ void display_monitor() {
         printf("Time: %s\n", time_str);
         printf("───────────────────────────────────────────────────────────────────────────────\n");
         
-        // Table header
         set_color(COLOR_BOLD);
         printf("%-20s %-8s %-10s %-12s %-12s %-10s %-10s\n",
                "CONTAINER ID", "PID", "STATE", "CPU%", "MEMORY", "RUNTIME", "CREATED");
@@ -573,7 +536,6 @@ void display_monitor() {
             printf("No containers running\n");
             reset_color();
         } else {
-            // Sort: running first
             vector<container_info_t*> sorted_containers;
             for (int i = 0; i < count; i++) {
                 sorted_containers.push_back(containers[i]);
@@ -632,7 +594,6 @@ void display_monitor() {
         
         fflush(stdout);
         
-        // Check for input (non-blocking)
         struct termios old_term, new_term;
         tcgetattr(STDIN_FILENO, &old_term);
         new_term = old_term;
@@ -738,7 +699,6 @@ void interactive_create_container() {
         }
     }
     
-    // Parse command
     vector<char*> args;
     string cmd = command;
     bool in_quotes = false;
@@ -773,7 +733,6 @@ void interactive_create_container() {
     }
     args.push_back(nullptr);
     
-    // Create container config
     container_config_t config;
     if (strlen(container_name) > 0) {
         config.id = strdup(container_name);
@@ -1014,7 +973,7 @@ void run_tests() {
 
 // Initialize 5 containers with different resource consumption patterns
 void init_containers() {
-    printf("Initializing 5 containers with different resource patterns...\n");
+    // printf("Initializing 5 containers with different resource patterns...\n");
     
     time_t base_time = time(nullptr);
     int counter = 0;
@@ -1043,9 +1002,9 @@ void init_containers() {
         config.command_argc = 3;
         
         if (container_manager_run(&cm, &config) == 0) {
-            printf("  ✓ Container 1 (CPU only) started: %s\n", container_id);
+            // printf("  ✓ Container 1 (CPU only) started: %s\n", container_id);
         } else {
-            printf("  ✗ Failed to start Container 1\n");
+            // printf("  ✗ Failed to start Container 1\n");
         }
         
         for (auto arg : args) if (arg) free(arg);
@@ -1078,9 +1037,9 @@ void init_containers() {
         config.command_argc = 3;
         
         if (container_manager_run(&cm, &config) == 0) {
-            printf("  ✓ Container 2 (RAM only) started: %s\n", container_id);
+            // printf("  ✓ Container 2 (RAM only) started: %s\n", container_id);
         } else {
-            printf("  ✗ Failed to start Container 2\n");
+            // printf("  ✗ Failed to start Container 2\n");
         }
         
         for (auto arg : args) if (arg) free(arg);
@@ -1113,9 +1072,9 @@ void init_containers() {
         config.command_argc = 3;
         
         if (container_manager_run(&cm, &config) == 0) {
-            printf("  ✓ Container 3 (CPU + RAM) started: %s\n", container_id);
+            // printf("  ✓ Container 3 (CPU + RAM) started: %s\n", container_id);
         } else {
-            printf("  ✗ Failed to start Container 3\n");
+            // printf("  ✗ Failed to start Container 3\n");
         }
         
         for (auto arg : args) if (arg) free(arg);
@@ -1148,9 +1107,9 @@ void init_containers() {
         config.command_argc = 3;
         
         if (container_manager_run(&cm, &config) == 0) {
-            printf("  ✓ Container 4 (Idle) started: %s\n", container_id);
+            // printf("  ✓ Container 4 (Idle) started: %s\n", container_id);
         } else {
-            printf("  ✗ Failed to start Container 4\n");
+            // printf("  ✗ Failed to start Container 4\n");
         }
         
         for (auto arg : args) if (arg) free(arg);
@@ -1183,9 +1142,9 @@ void init_containers() {
         config.command_argc = 3;
         
         if (container_manager_run(&cm, &config) == 0) {
-            printf("  ✓ Container 5 (CPU heavy, low RAM) started: %s\n", container_id);
+            // printf("  ✓ Container 5 (CPU heavy, low RAM) started: %s\n", container_id);
         } else {
-            printf("  ✗ Failed to start Container 5\n");
+            // printf("  ✗ Failed to start Container 5\n");
         }
         
         for (auto arg : args) if (arg) free(arg);
@@ -1194,7 +1153,7 @@ void init_containers() {
         free(config.fs_config.root_path);
     }
     
-    printf("Container initialization complete!\n\n");
+    // printf("Container initialization complete!\n\n");
 }
 
 // Signal handler
@@ -1396,8 +1355,8 @@ int main(int argc, char *argv[])
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     web_server->start();
-    printf("Web server started on port 808\n");
-    printf("Open http://localhost:808 in your browser\n");
+    // printf("Web server started on port 808\n");
+    // printf("Open http://localhost:808 in your browser\n");
 
     // If no arguments, run interactive menu
     if (argc < 2)

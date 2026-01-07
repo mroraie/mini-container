@@ -38,20 +38,17 @@ void SimpleWebServer::stop() {
 }
 
 void SimpleWebServer::serverThread() {
-    // Create socket
         server_socket_ = socket(AF_INET, SOCK_STREAM, 0);
         if (server_socket_ == -1) {
             std::cerr << "Failed to create socket: " << strerror(errno) << std::endl;
             return;
         }
 
-        // Set SO_REUSEADDR
         int reuse = 1;
         if (setsockopt(server_socket_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == -1) {
             std::cerr << "Warning: Failed to set SO_REUSEADDR: " << strerror(errno) << std::endl;
         }
 
-        // Bind socket
         sockaddr_in server_addr{};
         server_addr.sin_family = AF_INET;
         server_addr.sin_addr.s_addr = INADDR_ANY;
@@ -64,7 +61,6 @@ void SimpleWebServer::serverThread() {
             return;
         }
 
-        // Listen
         if (listen(server_socket_, 5) == -1) {
             std::cerr << "Failed to listen on socket" << std::endl;
             close(server_socket_);
@@ -86,7 +82,6 @@ void SimpleWebServer::serverThread() {
                 continue;
             }
 
-            // Handle request
             char buffer[4096];
             ssize_t bytes_read = read(client_socket, buffer, sizeof(buffer) - 1);
             if (bytes_read > 0) {
@@ -176,7 +171,7 @@ std::string SimpleWebServer::getContainerListJSON() {
 std::string SimpleWebServer::generateHTML() {
         return R"HTML(
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -192,7 +187,7 @@ std::string SimpleWebServer::generateHTML() {
             font-family: 'Courier New', monospace;
             background: #000000;
             color: #00ff00;
-            direction: rtl;
+            direction: ltr;
             padding: 10px;
             font-size: 12px;
         }
@@ -240,7 +235,7 @@ std::string SimpleWebServer::generateHTML() {
         }
 
         .table th {
-            text-align: right;
+            text-align: left;
             padding: 5px 10px;
             font-weight: normal;
             color: #00ff00;
@@ -318,20 +313,20 @@ std::string SimpleWebServer::generateHTML() {
 </head>
 <body>
     <div class="header">
-        <h1>مانیتور کانتینرها - Mini Container Monitor (Live)</h1>
+        <h1>Container Monitor - Mini Container Monitor (Live)</h1>
     </div>
 
     <div class="stats-bar">
         <div class="stat-item">
-            <span class="stat-label">کانتینرهای فعال:</span>
+            <span class="stat-label">Active Containers:</span>
             <span class="stat-value" id="running-count">0</span>
         </div>
         <div class="stat-item">
-            <span class="stat-label">کل کانتینرها:</span>
+            <span class="stat-label">Total Containers:</span>
             <span class="stat-value" id="total-count">0</span>
         </div>
         <div class="stat-item">
-            <span class="stat-label">به‌روزرسانی:</span>
+            <span class="stat-label">Last Update:</span>
             <span class="stat-value" id="update-time">--:--:--</span>
         </div>
     </div>
@@ -341,22 +336,22 @@ std::string SimpleWebServer::generateHTML() {
             <tr>
                 <th style="width: 20%;">ID</th>
                 <th style="width: 10%;">PID</th>
-                <th style="width: 10%;">وضعیت</th>
+                <th style="width: 10%;">Status</th>
                 <th style="width: 15%;">CPU</th>
-                <th style="width: 15%;">حافظه</th>
-                <th style="width: 15%;">زمان اجرا</th>
-                <th style="width: 15%;">زمان ایجاد</th>
+                <th style="width: 15%;">Memory</th>
+                <th style="width: 15%;">Runtime</th>
+                <th style="width: 15%;">Created</th>
             </tr>
         </thead>
         <tbody id="container-table-body">
             <tr>
-                <td colspan="7" class="no-containers">در حال بارگذاری...</td>
+                <td colspan="7" class="no-containers">Loading...</td>
             </tr>
         </tbody>
     </table>
 
     <div class="footer">
-        به‌روزرسانی خودکار هر 1 ثانیه | فشردن F5 برای به‌روزرسانی دستی
+        Auto-update every 1 second | Press F5 for manual update
     </div>
 
     <script>
@@ -385,7 +380,7 @@ std::string SimpleWebServer::generateHTML() {
         function formatDate(timestamp) {
             if (!timestamp) return '--';
             const date = new Date(timestamp * 1000);
-            return date.toLocaleTimeString('fa-IR');
+            return date.toLocaleTimeString('en-US');
         }
 
         function calculateCPUPercent(containerId, cpuUsageNs, currentTime) {
@@ -438,12 +433,12 @@ std::string SimpleWebServer::generateHTML() {
                     totalCount.textContent = total;
 
                     const now = new Date();
-                    updateTime.textContent = now.toLocaleTimeString('fa-IR');
+                    updateTime.textContent = now.toLocaleTimeString('en-US');
 
                     tbody.innerHTML = '';
 
                     if (!data.containers || data.containers.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="7" class="no-containers">هیچ کانتینری یافت نشد</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="7" class="no-containers">No containers found</td></tr>';
                         return;
                     }
 
@@ -458,10 +453,10 @@ std::string SimpleWebServer::generateHTML() {
                         
                         const statusClass = 'status-' + container.state.toLowerCase();
                         const statusText = {
-                            'created': 'ایجاد شده',
-                            'running': 'در حال اجرا',
-                            'stopped': 'متوقف شده',
-                            'destroyed': 'نابود شده'
+                            'created': 'CREATED',
+                            'running': 'RUNNING',
+                            'stopped': 'STOPPED',
+                            'destroyed': 'DESTROYED'
                         }[container.state.toLowerCase()] || container.state;
 
                         let cpuDisplay = '--';
@@ -502,24 +497,10 @@ std::string SimpleWebServer::generateHTML() {
 
                         row.innerHTML = `
                             <td>${container.id}</td>
-                            <td>${container.pid || '--'}</td>
+                            <td>${container.pid || '-----'}</td>
                             <td class="${statusClass}">${statusText}</td>
-                            <td>
-                                ${container.state === 'RUNNING' ? `
-                                    <div class="cpu-bar">
-                                        <div class="cpu-bar-fill" style="width: ${cpuPercent}%"></div>
-                                    </div>
-                                    ${cpuDisplay}
-                                ` : '--'}
-                            </td>
-                            <td>
-                                ${container.state === 'RUNNING' ? `
-                                    <div class="memory-bar">
-                                        <div class="memory-bar-fill" style="width: ${memoryPercent}%"></div>
-                                    </div>
-                                    ${memoryDisplay}
-                                ` : '--'}
-                            </td>
+                            <td>-----</td>
+                            <td>-----</td>
                             <td>${formatTime(runtime)}</td>
                             <td>${formatDate(container.created_at)}</td>
                         `;
@@ -530,17 +511,14 @@ std::string SimpleWebServer::generateHTML() {
                 .catch(error => {
                     console.error('Error:', error);
                     document.getElementById('container-table-body').innerHTML = 
-                        '<tr><td colspan="7" class="no-containers" style="color: #ff0000;">خطا در بارگذاری داده‌ها</td></tr>';
+                        '<tr><td colspan="7" class="no-containers" style="color: #ff0000;">Error loading data</td></tr>';
                 });
         }
 
-        // Initial load
         updateMonitor();
 
-        // Auto refresh every 1 second
         setInterval(updateMonitor, 1000);
 
-        // Also refresh on F5
         document.addEventListener('keydown', function(e) {
             if (e.key === 'F5') {
                 e.preventDefault();
