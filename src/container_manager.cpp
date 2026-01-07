@@ -75,22 +75,16 @@ static int is_pid_alive(pid_t pid) {
     return (errno == ESRCH) ? 0 : 1;
 }
 
-// Kill all child processes of a PID
 static void kill_process_tree(pid_t pid) {
     if (pid <= 0) return;
     
-    // First, try SIGTERM to allow graceful shutdown
     kill(pid, SIGTERM);
-    usleep(100000); // Wait 100ms
+    usleep(100000);
     
-    // Check if process is still alive
     if (kill(pid, 0) == 0) {
-        // Process still alive, try SIGKILL
         kill(pid, SIGKILL);
-        usleep(50000); // Wait 50ms
+        usleep(50000);
     }
-    
-    // Kill all children in the process tree
     char proc_path[256];
     snprintf(proc_path, sizeof(proc_path), "/proc/%d/task", pid);
     
@@ -108,7 +102,6 @@ static void kill_process_tree(pid_t pid) {
         closedir(dir);
     }
     
-    // Also try to kill children via /proc/<pid>/task
     snprintf(proc_path, sizeof(proc_path), "/proc/%d/task/%d/children", pid, pid);
     FILE *fp = fopen(proc_path, "r");
     if (fp) {
@@ -198,18 +191,12 @@ static int load_state(container_manager_t *cm) {
             sscanf(p, " \"stopped_at\": %ld", &stopped_at);
         }
         
-        // Check for end of container object (} or },)
         if (in_container && (strstr(p, "}") || (strstr(p, "},")))) {
-            // End of container entry
             if (container_id[0] != '\0') {
-                // Check if PID is still alive
                 if (state == CONTAINER_RUNNING && !is_pid_alive(pid)) {
-                    // Process died, mark as stopped
                     state = CONTAINER_STOPPED;
                     stopped_at = time(nullptr);
                 }
-                
-                // Only restore if container is not destroyed
                 if (state != CONTAINER_DESTROYED) {
                     container_info_t *info = static_cast<container_info_t*>(calloc(1, sizeof(container_info_t)));
                     if (info) {
@@ -229,7 +216,6 @@ static int load_state(container_manager_t *cm) {
                     }
                 }
                 
-                // Reset for next container
                 memset(container_id, 0, sizeof(container_id));
                 pid = 0;
                 state = 0;
@@ -374,10 +360,7 @@ int container_manager_stop(container_manager_t *cm, const char *container_id) {
         return -1;
     }
 
-    // Kill the entire process tree including all children
     kill_process_tree(info->pid);
-    
-    // Also kill all processes in the cgroup
     char cgroup_procs_path[512];
     if (cm->rm->version == CGROUP_V2) {
         snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 

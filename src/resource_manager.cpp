@@ -22,29 +22,22 @@ using namespace std;
 
 #define BUF_SIZE 512
 
-// Macro for debug logging (disabled by default unless a callback is provided).
-// This keeps normal runs quiet and avoids flooding stderr.
-// Disabled: Set to empty macro to prevent debug output
 #define DEBUG_LOG(rm, fmt, ...) do { \
     (void)(rm); \
     (void)(fmt); \
 } while(0)
 
-// Helper function to find the correct cpuacct.usage file path for v1
 static int find_cpuacct_usage_path(resource_manager_t *rm, const char *container_id, char *path, size_t path_size) {
-    // Try cpu,cpuacct first (most common)
     snprintf(path, path_size, "%s/%s_%s/cpuacct.usage", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
     if (access(path, R_OK) == 0) {
         return 0;
     }
     
-    // Try separate cpuacct
     snprintf(path, path_size, "%s/%s_%s/cpuacct.usage", CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
     if (access(path, R_OK) == 0) {
         return 0;
     }
     
-    // Try cpu path (some systems have cpuacct.usage in cpu directory)
     snprintf(path, path_size, "%s/%s_%s/cpuacct.usage", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
     if (access(path, R_OK) == 0) {
         return 0;
@@ -54,11 +47,9 @@ static int find_cpuacct_usage_path(resource_manager_t *rm, const char *container
 }
 
 static cgroup_version_t detect_cgroup_version() {
-    // Check for cgroup2 first (unified hierarchy)
     if (access(CGROUP_V2_CONTROLLERS, F_OK) == 0) {
         return CGROUP_V2;
     }
-    // Fall back to cgroup v1
     if (access(CPU_CGROUP_PATH, F_OK) == 0 && access(MEMORY_CGROUP_PATH, F_OK) == 0) {
         return CGROUP_V1;
     }
