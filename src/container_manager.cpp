@@ -175,7 +175,6 @@ static int load_state(container_manager_t *cm) {
             continue;
         }
         
-        // Check if we're entering a container object
         if (strstr(p, "\"id\"")) {
             in_container = true;
             sscanf(p, " \"id\": \"%255[^\"]\"", container_id);

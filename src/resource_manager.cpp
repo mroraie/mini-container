@@ -250,7 +250,6 @@ int resource_manager_init(resource_manager_t *rm, const char *base_path) {
     rm->version = detect_cgroup_version();
 
     if (rm->version == CGROUP_V2) {
-        // Check if cgroup2 controllers are available
         char controllers_path[BUF_SIZE];
         snprintf(controllers_path, sizeof(controllers_path), "%s/cgroup.controllers", CGROUP_ROOT);
         if (access(controllers_path, F_OK) != 0) {
@@ -307,7 +306,6 @@ int resource_manager_create_cgroup(resource_manager_t *rm,
         }
     } else {
         // cgroup v1: create separate directories for CPU and memory
-        // Try cpu,cpuacct first (most common)
         snprintf(path, sizeof(path), "%s/%s_%s", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
         if (mkdir(path, 0755) == -1 && errno != EEXIST) {
             // Fallback to separate cpu and cpuacct
@@ -345,7 +343,6 @@ int resource_manager_create_cgroup(resource_manager_t *rm,
     return 0;
 }
 
-// Helper function to add all threads of a process to cgroup
 static int add_all_threads_to_cgroup(resource_manager_t *rm, const char *container_id, pid_t pid, const char *cgroup_path) {
     char task_dir_path[BUF_SIZE];
     snprintf(task_dir_path, sizeof(task_dir_path), "/proc/%d/task", pid);
@@ -468,7 +465,6 @@ int resource_manager_destroy_cgroup(resource_manager_t *rm,
         snprintf(path, sizeof(path), "%s/%s_%s", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
         rmdir(path);
         
-        // Also try separate paths
         snprintf(path, sizeof(path), "%s/%s_%s", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
         rmdir(path);
 
@@ -507,7 +503,6 @@ int resource_manager_get_stats(resource_manager_t *rm,
     if (rm->version == CGROUP_V2) {
         snprintf(path, sizeof(path), "%s/%s_%s/cgroup.procs", CGROUP_ROOT, rm->cgroup_path, container_id);
         if (read_file(path, buffer, sizeof(buffer), rm) == 0) {
-            // Check if there are any PIDs in cgroup.procs
             if (strlen(buffer) > 0 && buffer[0] != '\n' && buffer[0] != '\0') {
                 DEBUG_LOG(rm, "Debug: Found processes in cgroup.procs: '%s'\n", buffer);
             } else {
@@ -571,7 +566,6 @@ int resource_manager_get_stats(resource_manager_t *rm,
                 }
             } else {
                 DEBUG_LOG(rm, "Debug: Could not find cpuacct.usage path for container %s\n", container_id);
-                // Try to list possible paths
                 snprintf(path, sizeof(path), "%s/%s_%s/cpuacct.usage", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
                 DEBUG_LOG(rm, "Debug: Tried path: %s (exists: %s)\n", path, access(path, F_OK) == 0 ? "yes" : "no");
                 snprintf(path, sizeof(path), "%s/%s_%s/cpuacct.usage", CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
