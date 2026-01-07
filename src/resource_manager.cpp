@@ -339,7 +339,7 @@ int resource_manager_create_cgroup(resource_manager_t *rm,
         }
     }
 
-    if (limits->enabled && limits->cpu.shares > 0) {
+    if (limits->enabled && (limits->cpu.shares > 0 || limits->cpu.quota_us > 0)) {
         if (set_cpu_limits(rm, container_id, &limits->cpu) != 0) {
             return -1;
         }

@@ -1013,6 +1013,11 @@ void init_containers() {
     const int runtime_seconds = 600;  // 10 minutes
     char cmd_buffer[512];
     
+    // Common resource limits: 1GB RAM, 50% of one Pentium core
+    const unsigned long memory_limit = 1024 * 1024 * 1024;  // 1 GB
+    const int cpu_quota_us = 50000;  // 50% of one core (50000/100000 = 0.5)
+    const int cpu_period_us = 100000;  // 100ms period
+    
     // Container 1: CPU intensive - multiple CPU-bound processes
     {
         container_config_t config;
@@ -1023,8 +1028,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "cpu_intensive_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = 80 * 1024 * 1024;  // 80 MB limit
-        config.res_limits.cpu.shares = 256;  // Limited CPU shares
+        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
+        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.cpu.period_us = cpu_period_us;
+        config.res_limits.cpu.shares = 512;  // CPU shares
         config.ns_config.hostname = strdup("cpu-intensive");
         config.fs_config.root_path = strdup("/");
         
@@ -1057,8 +1064,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "ram_intensive_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = 200 * 1024 * 1024;  // 200 MB limit
-        config.res_limits.cpu.shares = 128;  // Low CPU
+        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
+        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.cpu.period_us = cpu_period_us;
+        config.res_limits.cpu.shares = 512;  // CPU shares
         config.ns_config.hostname = strdup("ram-intensive");
         config.fs_config.root_path = strdup("/");
         
@@ -1091,8 +1100,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "cpu_ram_heavy_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = 150 * 1024 * 1024;  // 150 MB limit
-        config.res_limits.cpu.shares = 256;  // Limited CPU
+        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
+        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.cpu.period_us = cpu_period_us;
+        config.res_limits.cpu.shares = 512;  // CPU shares
         config.ns_config.hostname = strdup("cpu-ram-heavy");
         config.fs_config.root_path = strdup("/");
         
@@ -1125,8 +1136,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "cpu_calc_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = 100 * 1024 * 1024;  // 100 MB limit
-        config.res_limits.cpu.shares = 300;  // Medium CPU limit
+        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
+        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.cpu.period_us = cpu_period_us;
+        config.res_limits.cpu.shares = 512;  // CPU shares
         config.ns_config.hostname = strdup("cpu-calc");
         config.fs_config.root_path = strdup("/");
         
@@ -1159,8 +1172,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "mem_stress_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = 180 * 1024 * 1024;  // 180 MB limit
-        config.res_limits.cpu.shares = 100;  // Low CPU
+        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
+        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.cpu.period_us = cpu_period_us;
+        config.res_limits.cpu.shares = 512;  // CPU shares
         config.ns_config.hostname = strdup("mem-stress");
         config.fs_config.root_path = strdup("/");
         
@@ -1193,8 +1208,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "mixed_workload_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = 120 * 1024 * 1024;  // 120 MB limit
-        config.res_limits.cpu.shares = 200;  // Medium CPU
+        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
+        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.cpu.period_us = cpu_period_us;
+        config.res_limits.cpu.shares = 512;  // CPU shares
         config.ns_config.hostname = strdup("mixed-workload");
         config.fs_config.root_path = strdup("/");
         
@@ -1227,8 +1244,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "high_cpu_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = 60 * 1024 * 1024;  // 60 MB limit
-        config.res_limits.cpu.shares = 400;  // Higher CPU limit
+        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
+        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.cpu.period_us = cpu_period_us;
+        config.res_limits.cpu.shares = 512;  // CPU shares
         config.ns_config.hostname = strdup("high-cpu");
         config.fs_config.root_path = strdup("/");
         
@@ -1261,8 +1280,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "high_mem_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = 250 * 1024 * 1024;  // 250 MB limit
-        config.res_limits.cpu.shares = 80;  // Very low CPU
+        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
+        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.cpu.period_us = cpu_period_us;
+        config.res_limits.cpu.shares = 512;  // CPU shares
         config.ns_config.hostname = strdup("high-mem");
         config.fs_config.root_path = strdup("/");
         
@@ -1295,8 +1316,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "balanced_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = 140 * 1024 * 1024;  // 140 MB limit
-        config.res_limits.cpu.shares = 250;  // Medium CPU
+        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
+        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.cpu.period_us = cpu_period_us;
+        config.res_limits.cpu.shares = 512;  // CPU shares
         config.ns_config.hostname = strdup("balanced");
         config.fs_config.root_path = strdup("/");
         
@@ -1329,8 +1352,10 @@ void init_containers() {
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "max_stress_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
-        config.res_limits.memory.limit_bytes = 220 * 1024 * 1024;  // 220 MB limit
-        config.res_limits.cpu.shares = 350;  // Higher CPU limit
+        config.res_limits.memory.limit_bytes = memory_limit;  // 1 GB limit
+        config.res_limits.cpu.quota_us = cpu_quota_us;  // 50% of one core
+        config.res_limits.cpu.period_us = cpu_period_us;
+        config.res_limits.cpu.shares = 512;  // CPU shares
         config.ns_config.hostname = strdup("max-stress");
         config.fs_config.root_path = strdup("/");
         
@@ -1363,6 +1388,18 @@ void signal_handler(int signum) {
     monitor_mode = false;
     show_cursor();
     
+    // Stop all containers first
+    int count;
+    container_info_t** containers = container_manager_list(&cm, &count);
+    for (int i = 0; i < count; i++) {
+        if (containers[i]->state == CONTAINER_RUNNING) {
+            container_manager_stop(&cm, containers[i]->id);
+        }
+    }
+    
+    // Wait a bit for containers to stop
+    sleep(1);
+    
     // Stop web server
     if (web_server) {
         web_server->stop();
@@ -1372,6 +1409,8 @@ void signal_handler(int signum) {
     
     // Cleanup container manager
     container_manager_cleanup(&cm);
+    
+    exit(0);
 }
 
 // Interactive menu with live monitor
