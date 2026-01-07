@@ -1065,9 +1065,7 @@ void init_containers() {
         config.command = args.data();
         config.command_argc = 3;
         
-        if (container_manager_run(&cm, &config) == 0) {
-            // printf("  ✓ Container 2 (RAM intensive) started: %s\n", container_id);
-        }
+        container_manager_run(&cm, &config);
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
