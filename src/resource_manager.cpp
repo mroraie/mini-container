@@ -24,17 +24,10 @@ using namespace std;
 
 // Macro for debug logging (disabled by default unless a callback is provided).
 // This keeps normal runs quiet and avoids flooding stderr.
+// Disabled: Set to empty macro to prevent debug output
 #define DEBUG_LOG(rm, fmt, ...) do { \
-    if ((rm) && (rm)->debug_log_callback) { \
-        char debug_msg[BUF_SIZE * 4]; \
-        int len = snprintf(debug_msg, sizeof(debug_msg), fmt, ##__VA_ARGS__); \
-        if (len < 0) { \
-            debug_msg[0] = '\0'; \
-        } else if (len >= (int)sizeof(debug_msg)) { \
-            debug_msg[sizeof(debug_msg) - 1] = '\0'; \
-        } \
-        (rm)->debug_log_callback(debug_msg); \
-    } \
+    (void)(rm); \
+    (void)(fmt); \
 } while(0)
 
 // Helper function to find the correct cpuacct.usage file path for v1
