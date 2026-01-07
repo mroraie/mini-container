@@ -1011,6 +1011,7 @@ void init_containers() {
     time_t base_time = time(nullptr);
     int counter = 0;
     const int runtime_seconds = 600;  // 10 minutes
+    char cmd_buffer[512];
     
     // Container 1: CPU intensive - multiple CPU-bound processes
     {
@@ -1030,7 +1031,8 @@ void init_containers() {
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
-        args.push_back(strdup("for i in 1 2 3 4; do yes > /dev/null & done; sleep 600"));
+        snprintf(cmd_buffer, sizeof(cmd_buffer), "for i in 1 2 3 4; do yes > /dev/null & done; sleep %d", runtime_seconds);
+        args.push_back(strdup(cmd_buffer));
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
@@ -1063,7 +1065,8 @@ void init_containers() {
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
-        args.push_back(strdup("python3 -c 'a = [bytearray(50*1024*1024) for _ in range(3)]; import time; time.sleep(600)'"));
+        snprintf(cmd_buffer, sizeof(cmd_buffer), "python3 -c 'a = [bytearray(50*1024*1024) for _ in range(3)]; import time; time.sleep(%d)'", runtime_seconds);
+        args.push_back(strdup(cmd_buffer));
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
@@ -1096,7 +1099,8 @@ void init_containers() {
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
-        args.push_back(strdup("yes > /dev/null & python3 -c 'a = bytearray(120*1024*1024); import time; [i*i for i in range(10000000)]; time.sleep(600)'"));
+        snprintf(cmd_buffer, sizeof(cmd_buffer), "yes > /dev/null & python3 -c 'a = bytearray(120*1024*1024); import time; [i*i for i in range(10000000)]; time.sleep(%d)'", runtime_seconds);
+        args.push_back(strdup(cmd_buffer));
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
@@ -1129,7 +1133,8 @@ void init_containers() {
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
-        args.push_back(strdup("python3 -c 'import time; start=time.time(); [sum(range(i)) for i in range(50000)]; time.sleep(600)'"));
+        snprintf(cmd_buffer, sizeof(cmd_buffer), "python3 -c 'import time; start=time.time(); [sum(range(i)) for i in range(50000)]; time.sleep(%d)'", runtime_seconds);
+        args.push_back(strdup(cmd_buffer));
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
@@ -1162,7 +1167,8 @@ void init_containers() {
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
-        args.push_back(strdup("python3 -c 'import time; data = [bytearray(30*1024*1024) for _ in range(5)]; time.sleep(600)'"));
+        snprintf(cmd_buffer, sizeof(cmd_buffer), "python3 -c 'import time; data = [bytearray(30*1024*1024) for _ in range(5)]; time.sleep(%d)'", runtime_seconds);
+        args.push_back(strdup(cmd_buffer));
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
@@ -1195,7 +1201,8 @@ void init_containers() {
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
-        args.push_back(strdup("yes > /dev/null & dd if=/dev/zero of=/tmp/test bs=1M count=50 status=none & sleep 600"));
+        snprintf(cmd_buffer, sizeof(cmd_buffer), "yes > /dev/null & dd if=/dev/zero of=/tmp/test bs=1M count=50 status=none & sleep %d", runtime_seconds);
+        args.push_back(strdup(cmd_buffer));
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
@@ -1228,7 +1235,8 @@ void init_containers() {
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
-        args.push_back(strdup("for i in 1 2 3; do yes > /dev/null & done; sleep 600"));
+        snprintf(cmd_buffer, sizeof(cmd_buffer), "for i in 1 2 3; do yes > /dev/null & done; sleep %d", runtime_seconds);
+        args.push_back(strdup(cmd_buffer));
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
@@ -1261,7 +1269,8 @@ void init_containers() {
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
-        args.push_back(strdup("python3 -c 'a = [bytearray(40*1024*1024) for _ in range(5)]; import time; time.sleep(600)'"));
+        snprintf(cmd_buffer, sizeof(cmd_buffer), "python3 -c 'a = [bytearray(40*1024*1024) for _ in range(5)]; import time; time.sleep(%d)'", runtime_seconds);
+        args.push_back(strdup(cmd_buffer));
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
@@ -1294,7 +1303,8 @@ void init_containers() {
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
-        args.push_back(strdup("yes > /dev/null & python3 -c 'a = bytearray(100*1024*1024); import time; time.sleep(600)'"));
+        snprintf(cmd_buffer, sizeof(cmd_buffer), "yes > /dev/null & python3 -c 'a = bytearray(100*1024*1024); import time; time.sleep(%d)'", runtime_seconds);
+        args.push_back(strdup(cmd_buffer));
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
@@ -1327,7 +1337,8 @@ void init_containers() {
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
-        args.push_back(strdup("for i in 1 2 3 4 5; do yes > /dev/null & done; python3 -c 'a = [bytearray(35*1024*1024) for _ in range(5)]; import time; [i**2 for i in range(2000000)]; time.sleep(600)'"));
+        snprintf(cmd_buffer, sizeof(cmd_buffer), "for i in 1 2 3 4 5; do yes > /dev/null & done; python3 -c 'a = [bytearray(35*1024*1024) for _ in range(5)]; import time; [i**2 for i in range(2000000)]; time.sleep(%d)'", runtime_seconds);
+        args.push_back(strdup(cmd_buffer));
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
