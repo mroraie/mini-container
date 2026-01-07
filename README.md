@@ -1,217 +1,433 @@
 # Mini Container
 
-A lightweight container implementation in C++ that provides Docker-like container management capabilities using Linux namespaces, cgroups, and filesystem isolation.
+یک پیاده‌سازی سبک‌وزن از کانتینرها مشابه Docker که با استفاده از Linux namespaces، cgroups و filesystem isolation ساخته شده است. این پروژه به عنوان یک پروژه آموزشی برای درک مفاهیم سیستم‌عامل و کانتینری‌سازی طراحی شده است.
 
-## Features
+## 📋 فهرست مطالب
 
-- **Container Lifecycle Management**: Create, start, stop, destroy containers
-- **Resource Limits**: CPU shares and memory limits using cgroups
-- **Namespace Isolation**: PID, mount, UTS, and network namespaces
-- **Filesystem Management**: Root filesystem configuration and isolation
-- **Interactive CLI**: User-friendly terminal interface with live monitoring
-- **Web Dashboard**: Built-in web server for container management via browser
-- **Real-time Monitoring**: htop-like monitor showing CPU, memory usage, and runtime statistics
-- **Container Execution**: Execute commands in running containers
+- [ویژگی‌ها](#-ویژگی‌ها)
+- [نیازمندی‌ها](#-نیازمندی‌ها)
+- [نصب و راه‌اندازی](#-نصب-و-راه‌اندازی)
+- [استفاده](#-استفاده)
+- [ساختار پروژه](#-ساختار-پروژه)
+- [معماری](#-معماری)
+- [مثال‌ها](#-مثال‌ها)
+- [محدودیت‌ها](#-محدودیت‌ها)
+- [مشارکت](#-مشارکت)
+- [مجوز](#-مجوز)
 
-## Requirements
+## ✨ ویژگی‌ها
 
-- Linux operating system (uses Linux-specific features)
-- C++11 compatible compiler (g++ recommended)
-- Root privileges (for namespace and cgroup operations)
-- pthread library
+### مدیریت چرخه حیات کانتینر
+- **ایجاد**: ساخت کانتینرهای جدید با تنظیمات سفارشی
+- **اجرا**: راه‌اندازی کانتینرها با دستورات مختلف
+- **توقف**: متوقف کردن کانتینرهای در حال اجرا
+- **حذف**: نابود کردن کانتینرها و پاکسازی منابع
 
-## Building
+### محدودیت منابع (Resource Limits)
+- **CPU**: محدودیت CPU با استفاده از cgroups
+  - CPU shares برای توزیع عادلانه CPU
+  - CPU quota برای محدود کردن استفاده از CPU (مثلاً 50% یک هسته)
+- **Memory**: محدودیت حافظه (پیش‌فرض: 1GB)
+- **پشتیبانی از cgroup v1 و v2**
+
+### ایزولاسیون (Isolation)
+- **Linux Namespaces**:
+  - PID namespace: ایزولاسیون شناسه فرایندها
+  - Mount namespace: ایزولاسیون فایل‌سیستم
+  - UTS namespace: ایزولاسیون hostname
+  - Network namespace: ایزولاسیون شبکه (پایه)
+- **Filesystem**: ایزولاسیون فایل‌سیستم با chroot/pivot_root
+
+### رابط کاربری
+- **CLI**: رابط خط فرمان کامل با دستورات مختلف
+- **Interactive Menu**: منوی تعاملی با مانیتور زنده
+- **Web Dashboard**: داشبورد وب برای مدیریت کانتینرها
+  - نمایش زنده وضعیت کانتینرها
+  - نمایش مصرف CPU و Memory
+  - نمایش اطلاعات سیستم (کل CPU و RAM در دسترس)
+  - به‌روزرسانی خودکار هر 5 ثانیه
+
+### مانیتورینگ
+- **Real-time Monitoring**: نمایش زنده وضعیت کانتینرها
+- **Resource Statistics**: نمایش مصرف CPU و Memory هر کانتینر
+- **System Information**: نمایش کل CPU و RAM در دسترس سیستم
+- **htop-like Monitor**: نمایش شبیه به htop
+
+### تست و توسعه
+- **Built-in Tests**: تست‌های داخلی برای CPU، Memory و ترکیبی
+- **10 Test Containers**: 10 کانتینر تست با الگوهای مختلف مصرف منابع
+- **Runtime**: کانتینرهای تست به مدت 10 دقیقه اجرا می‌شوند
+
+## 🔧 نیازمندی‌ها
+
+- **سیستم عامل**: Linux (از ویژگی‌های خاص لینوکس استفاده می‌کند)
+- **کامپایلر**: C++11 compatible compiler (g++ توصیه می‌شود)
+- **دسترسی**: دسترسی root (برای namespace و cgroup operations)
+- **کتابخانه‌ها**: pthread library
+- **cgroups**: cgroup v1 یا v2 باید فعال باشد
+
+### بررسی cgroups
 
 ```bash
-# Build both main application and web server
-make
+# بررسی cgroup v2
+ls /sys/fs/cgroup/cgroup.controllers
 
-# Build only main application
-make mini-container
-
-# Build only web server
-make web
-
-# Clean build artifacts
-make clean
-
-# Install to /usr/local/bin (requires sudo)
-make install
+# بررسی cgroup v1
+ls /sys/fs/cgroup/cpu
+ls /sys/fs/cgroup/memory
 ```
 
-## Usage
+## 🚀 نصب و راه‌اندازی
 
-### Interactive Mode
+### کامپایل
 
-Run without arguments to enter interactive mode:
+```bash
+# کلون کردن مخزن (اگر از git استفاده می‌کنید)
+git clone <repository-url>
+cd mini-container
+
+# کامپایل هر دو برنامه (main و web server)
+make
+
+# یا فقط برنامه اصلی
+make mini-container
+
+# یا فقط وب سرور
+make web
+
+# پاک کردن فایل‌های کامپایل شده
+make clean
+```
+
+### نصب سیستم
+
+```bash
+# نصب در /usr/local/bin (نیاز به sudo)
+sudo make install
+
+# حذف نصب
+sudo make uninstall
+```
+
+## 📖 استفاده
+
+### حالت تعاملی (Interactive Mode)
+
+اجرای برنامه بدون آرگومان برای ورود به منوی تعاملی:
 
 ```bash
 sudo ./mini-container
 ```
 
-This will display a live monitor and menu with options to:
-1. Create Container
-2. Full Monitor (htop-like view)
-3. List Containers
-4. Stop Container
-5. Destroy Container
-6. Container Info
-7. Run Tests
+این حالت شامل:
+- مانیتور زنده کانتینرها
+- منوی دستورات
+- به‌روزرسانی خودکار هر 5 ثانیه
 
-### Command Line Interface
+### رابط خط فرمان (CLI)
+
+#### ایجاد و اجرای کانتینر
 
 ```bash
-# Run a command in a new container
-sudo ./mini-container run /bin/sh -c "echo Hello World"
+# اجرای یک دستور ساده
+sudo ./mini-container run /bin/echo "Hello World"
 
-# Run with resource limits
-sudo ./mini-container run --memory 256 --cpu 512 /bin/echo "Hello"
+# اجرا با محدودیت منابع
+sudo ./mini-container run --memory 512 --cpu 256 /bin/sh
 
-# Run container in background
+# اجرا با hostname سفارشی
+sudo ./mini-container run --hostname my-container /bin/hostname
+
+# اجرا در پس‌زمینه
 sudo ./mini-container run --detach /bin/sh -c "while true; do sleep 1; done"
-
-# List all containers
-sudo ./mini-container list
-
-# Stop a container
-sudo ./mini-container stop container_123
-
-# Execute command in running container
-sudo ./mini-container exec container_123 /bin/ps
-
-# Get container information
-sudo ./mini-container info container_123
-
-# Destroy a container
-sudo ./mini-container destroy container_123
-
-# View htop-like monitor
-sudo ./mini-container monitor
-
-# Show help
-sudo ./mini-container help
 ```
 
-### Web Dashboard
+#### مدیریت کانتینرها
 
-The web server starts automatically on port 808. Open your browser and navigate to:
+```bash
+# لیست همه کانتینرها
+sudo ./mini-container list
+
+# توقف یک کانتینر
+sudo ./mini-container stop container_123
+
+# اجرای دستور در کانتینر در حال اجرا
+sudo ./mini-container exec container_123 /bin/ps
+
+# نمایش اطلاعات کانتینر
+sudo ./mini-container info container_123
+
+# حذف کانتینر
+sudo ./mini-container destroy container_123
+```
+
+#### مانیتورینگ
+
+```bash
+# نمایش مانیتور htop-like
+sudo ./mini-container monitor
+
+# یا
+sudo ./mini-container htop
+```
+
+#### راهنما
+
+```bash
+sudo ./mini-container help
+# یا
+sudo ./mini-container --help
+```
+
+### وب سرور
+
+وب سرور به صورت خودکار در پورت 808 راه‌اندازی می‌شود. برای دسترسی:
 
 ```
 http://localhost:808
 ```
 
-You can also run the standalone web server:
+یا برای دسترسی از راه دور:
+```
+http://<server-ip>:808
+```
+
+#### اجرای مستقل وب سرور
 
 ```bash
 sudo ./mini-container-web
 ```
 
-## Architecture
+#### API Endpoints
 
-The project consists of several key components:
+- `GET /`: صفحه اصلی HTML
+- `GET /api/containers`: لیست کانتینرها به صورت JSON
+- `GET /api/system`: اطلاعات سیستم (CPU و RAM) به صورت JSON
 
-- **Container Manager** (`container_manager.cpp`): Main orchestration layer managing container lifecycle
-- **Namespace Handler** (`namespace_handler.cpp`): Linux namespace isolation (PID, mount, UTS, network)
-- **Resource Manager** (`resource_manager.cpp`): CPU and memory limits via cgroups
-- **Filesystem Manager** (`filesystem_manager.cpp`): Root filesystem setup and management
-- **Web Server** (`web_server_simple.cpp`): HTTP server for web-based container management
-
-## Project Structure
+## 📁 ساختار پروژه
 
 ```
 mini-container/
-├── include/
-│   ├── container_manager.hpp
-│   ├── namespace_handler.hpp
-│   ├── resource_manager.hpp
-│   └── filesystem_manager.hpp
-├── src/
-│   ├── main.cpp              # Main CLI application
-│   ├── container_manager.cpp
-│   ├── namespace_handler.cpp
-│   ├── resource_manager.cpp
-│   ├── filesystem_manager.cpp
-│   ├── web_server_main.cpp   # Standalone web server
-│   ├── web_server_simple.cpp
-│   └── web_server_simple.hpp
-├── examples/
-├── Makefile
-└── README.md
+├── include/                    # فایل‌های هدر
+│   ├── container_manager.hpp  # مدیریت کانتینرها
+│   ├── namespace_handler.hpp  # مدیریت namespaces
+│   ├── resource_manager.hpp   # مدیریت منابع (CPU/Memory)
+│   └── filesystem_manager.hpp # مدیریت فایل‌سیستم
+├── src/                       # فایل‌های منبع
+│   ├── main.cpp              # برنامه اصلی CLI
+│   ├── container_manager.cpp # پیاده‌سازی مدیریت کانتینر
+│   ├── namespace_handler.cpp # پیاده‌سازی namespaces
+│   ├── resource_manager.cpp  # پیاده‌سازی مدیریت منابع
+│   ├── filesystem_manager.cpp# پیاده‌سازی فایل‌سیستم
+│   ├── web_server_main.cpp   # وب سرور مستقل
+│   ├── web_server_simple.cpp # پیاده‌سازی وب سرور
+│   └── web_server_simple.hpp # هدر وب سرور
+├── docs/                      # مستندات
+│   ├── technical_report.md   # گزارش فنی
+│   └── api.md                # مستندات API
+├── examples/                  # مثال‌ها
+├── Makefile                   # فایل ساخت
+└── README.md                  # این فایل
 ```
 
-## Container States
+## 🏗️ معماری
 
-Containers can be in one of the following states:
+### کامپوننت‌های اصلی
 
-- **CREATED**: Container created but not started
-- **RUNNING**: Container is currently running
-- **STOPPED**: Container was stopped
-- **DESTROYED**: Container has been destroyed
+1. **Container Manager** (`container_manager.cpp`)
+   - هماهنگی چرخه حیات کانتینرها
+   - مدیریت وضعیت کانتینرها
+   - ارتباط با سایر کامپوننت‌ها
 
-## Resource Limits
+2. **Namespace Handler** (`namespace_handler.cpp`)
+   - ایجاد و مدیریت Linux namespaces
+   - ایزولاسیون PID، Mount، UTS، Network
 
-- **Memory**: Specified in MB using `--memory` flag (default: 128 MB)
-- **CPU**: Specified as CPU shares using `--cpu` flag (default: 1024)
+3. **Resource Manager** (`resource_manager.cpp`)
+   - مدیریت cgroups
+   - محدودیت CPU و Memory
+   - پشتیبانی از cgroup v1 و v2
 
-## Examples
+4. **Filesystem Manager** (`filesystem_manager.cpp`)
+   - مدیریت root filesystem
+   - ایزولاسیون فایل‌سیستم
 
-### Basic Container
+5. **Web Server** (`web_server_simple.cpp`)
+   - HTTP server برای مدیریت وب
+   - API RESTful
+   - Dashboard HTML
+
+### جریان کار
+
+```
+User Command
+    ↓
+CLI Parser
+    ↓
+Container Manager
+    ├──→ Namespace Handler (ایزولاسیون)
+    ├──→ Resource Manager (محدودیت منابع)
+    └──→ Filesystem Manager (ایزولاسیون FS)
+    ↓
+Container Process
+```
+
+## 💡 مثال‌ها
+
+### مثال 1: اجرای یک دستور ساده
+
+```bash
+sudo ./mini-container run /bin/echo "Hello from container!"
+```
+
+### مثال 2: اجرای shell تعاملی
 
 ```bash
 sudo ./mini-container run /bin/sh
 ```
 
-### CPU-Intensive Container
+### مثال 3: کانتینر با محدودیت منابع
 
 ```bash
-sudo ./mini-container run --cpu 512 /bin/sh -c "while true; do :; done"
+# محدودیت 512MB RAM و 50% یک هسته CPU
+sudo ./mini-container run --memory 512 /bin/sh -c "stress --cpu 1 --timeout 60s"
 ```
 
-### Memory-Limited Container
+### مثال 4: اجرای چند کانتینر
 
 ```bash
-sudo ./mini-container run --memory 64 /bin/sh -c "dd if=/dev/zero of=/tmp/test bs=1M count=100"
+# کانتینر 1
+sudo ./mini-container run --hostname web1 /bin/sh -c "while true; do sleep 1; done" &
+
+# کانتینر 2
+sudo ./mini-container run --hostname web2 /bin/sh -c "while true; do sleep 1; done" &
+
+# مشاهده لیست
+sudo ./mini-container list
 ```
 
-### Custom Hostname
+### مثال 5: مانیتورینگ
 
 ```bash
-sudo ./mini-container run --hostname my-container /bin/hostname
+# مانیتور زنده
+sudo ./mini-container monitor
+
+# یا استفاده از منوی تعاملی
+sudo ./mini-container
+# سپس گزینه 2 را انتخاب کنید
 ```
 
-## Development
+## ⚙️ تنظیمات پیش‌فرض
 
-### Building for Development
+- **Memory Limit**: 1GB (1024MB) برای هر کانتینر
+- **CPU Limit**: 50% یک هسته (quota: 50000us, period: 100000us)
+- **Web Server Port**: 808
+- **Max Containers**: 10 (قابل تنظیم)
+- **Test Containers Runtime**: 600 ثانیه (10 دقیقه)
+
+## ⚠️ محدودیت‌ها
+
+- **نیاز به Root**: عملیات namespace و cgroup نیاز به دسترسی root دارد
+- **Linux Only**: فقط روی سیستم‌عامل Linux کار می‌کند
+- **پایه**: پیاده‌سازی پایه در مقایسه با runtimeهای تولیدی
+- **Network**: پشتیبانی از network namespace محدود است
+- **Security**: برای استفاده تولیدی نیاز به بررسی‌های امنیتی بیشتر دارد
+
+## 🔒 امنیت
+
+⚠️ **هشدار**: این یک پروژه آموزشی است و برای استفاده در محیط تولید طراحی نشده است. برای استفاده تولیدی، از runtimeهای تثبیت شده مانند Docker، Podman یا containerd استفاده کنید.
+
+## 🧪 تست
+
+برنامه شامل تست‌های داخلی است:
 
 ```bash
-# Enable debug symbols
-make CXXFLAGS="-Wall -Wextra -std=c++11 -g -Iinclude"
+sudo ./mini-container
+# گزینه 7 را انتخاب کنید (Run Tests)
 ```
 
-### Testing
-
-The interactive menu includes built-in tests:
+تست‌های موجود:
 - CPU Usage Test
 - Memory Limit Test
 - CPU Limit Test
 - Combined Test (CPU + Memory)
 
-## Limitations
+## 📊 وضعیت کانتینرها
 
-- Requires root privileges for namespace and cgroup operations
-- Linux-specific (uses Linux namespaces and cgroups)
-- Basic implementation compared to production container runtimes
-- Network namespace support is limited
+کانتینرها می‌توانند در یکی از این حالت‌ها باشند:
 
-## License
+- **CREATED**: کانتینر ایجاد شده اما هنوز شروع نشده
+- **RUNNING**: کانتینر در حال اجرا است
+- **STOPPED**: کانتینر متوقف شده است
+- **DESTROYED**: کانتینر حذف شده است
 
-This project is provided as-is for educational and development purposes.
+## 🐛 عیب‌یابی
 
-## Contributing
+### مشکل: cgroups در دسترس نیست
 
-Contributions are welcome! Please feel free to submit issues or pull requests.
+```bash
+# بررسی cgroup mount
+mount | grep cgroup
 
-## Disclaimer
+# بررسی دسترسی
+ls -la /sys/fs/cgroup/
+```
 
-This is an educational project demonstrating container concepts. For production use, consider using established container runtimes like Docker, Podman, or containerd.
+### مشکل: کانتینرها متوقف نمی‌شوند
+
+```bash
+# بررسی فرآیندهای باقی‌مانده
+ps aux | grep yes
+ps aux | grep python3
+
+# kill کردن دستی
+pkill -9 yes
+pkill -9 python3
+```
+
+### مشکل: وب سرور راه‌اندازی نمی‌شود
+
+```bash
+# بررسی پورت
+netstat -tuln | grep 808
+
+# بررسی لاگ‌ها
+sudo ./mini-container 2>&1 | grep -i error
+```
+
+## 🤝 مشارکت
+
+مشارکت‌ها خوش‌آمد هستند! لطفاً:
+
+1. Fork کنید
+2. یک branch برای feature خود ایجاد کنید (`git checkout -b feature/AmazingFeature`)
+3. تغییرات خود را commit کنید (`git commit -m 'Add some AmazingFeature'`)
+4. Push به branch (`git push origin feature/AmazingFeature`)
+5. یک Pull Request باز کنید
+
+## 📝 تغییرات اخیر
+
+- ✅ محدودیت منابع: همه کانتینرها به 1GB RAM و 50% یک هسته CPU محدود شدند
+- ✅ بهبود signal handler: همه فرآیندهای فرزند هنگام خروج kill می‌شوند
+- ✅ ساده‌سازی وب سرور: HTML ساده‌تر و بدون استایل‌های پیچیده
+- ✅ نمایش اطلاعات سیستم: کل CPU و RAM در دسترس در وب سرور
+- ✅ 10 کانتینر تست: کانتینرهای تست با الگوهای مختلف مصرف منابع
+
+## 📄 مجوز
+
+این پروژه برای اهداف آموزشی ارائه شده است. استفاده از آن آزاد است اما بدون هیچ گونه ضمانت.
+
+## 🙏 تشکر
+
+این پروژه برای درک بهتر مفاهیم سیستم‌عامل و کانتینری‌سازی طراحی شده است. برای استفاده در محیط تولید، از runtimeهای تثبیت شده استفاده کنید.
+
+## 📚 منابع و مراجع
+
+- [Linux Namespaces](https://man7.org/linux/man-pages/man7/namespaces.7.html)
+- [cgroups](https://www.kernel.org/doc/Documentation/cgroup-v1/cgroups.txt)
+- [Docker Architecture](https://docs.docker.com/get-started/overview/)
+
+---
+
+**نکته**: این یک پروژه آموزشی است. برای استفاده در محیط تولید، از Docker، Podman یا سایر runtimeهای تثبیت شده استفاده کنید.
 
