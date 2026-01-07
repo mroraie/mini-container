@@ -22,17 +22,18 @@ using namespace std;
 
 #define BUF_SIZE 512
 
-// Macro for debug logging
+// Macro for debug logging (disabled by default unless a callback is provided).
+// This keeps normal runs quiet and avoids flooding stderr.
 #define DEBUG_LOG(rm, fmt, ...) do { \
-    char debug_msg[BUF_SIZE * 4]; \
-    int len = snprintf(debug_msg, sizeof(debug_msg), fmt, ##__VA_ARGS__); \
-    if (len >= (int)sizeof(debug_msg)) { \
-        debug_msg[sizeof(debug_msg) - 1] = '\0'; \
-    } \
     if ((rm) && (rm)->debug_log_callback) { \
+        char debug_msg[BUF_SIZE * 4]; \
+        int len = snprintf(debug_msg, sizeof(debug_msg), fmt, ##__VA_ARGS__); \
+        if (len < 0) { \
+            debug_msg[0] = '\0'; \
+        } else if (len >= (int)sizeof(debug_msg)) { \
+            debug_msg[sizeof(debug_msg) - 1] = '\0'; \
+        } \
         (rm)->debug_log_callback(debug_msg); \
-    } else { \
-        fprintf(stderr, "%s", debug_msg); \
     } \
 } while(0)
 
@@ -74,21 +75,15 @@ static cgroup_version_t detect_cgroup_version() {
 static int write_file(const char *path, const char *value, resource_manager_t *rm = nullptr) {
     int fd = open(path, O_WRONLY);
     if (fd == -1) {
-        if (rm) {
-            DEBUG_LOG(rm, "Error: failed to open cgroup file %s for writing: %s\n", path, strerror(errno));
-        } else {
-            perror("open cgroup file failed");
-        }
+        (void)rm;
+        fprintf(stderr, "Error: failed to open cgroup file %s for writing: %s\n", path, strerror(errno));
         return -1;
     }
 
     ssize_t written = write(fd, value, strlen(value));
     if (written == -1) {
-        if (rm) {
-            DEBUG_LOG(rm, "Error: failed to write to cgroup file %s: %s\n", path, strerror(errno));
-        } else {
-            perror("write to cgroup file failed");
-        }
+        (void)rm;
+        fprintf(stderr, "Error: failed to write to cgroup file %s: %s\n", path, strerror(errno));
         close(fd);
         return -1;
     }
@@ -102,30 +97,21 @@ static int read_file(const char *path, char *buffer, size_t size, resource_manag
     if (fd == -1) {
         // Don't print error for missing files (they might not exist yet)
         if (errno != ENOENT) {
-            if (rm) {
-                DEBUG_LOG(rm, "Warning: failed to open cgroup file %s: %s\n", path, strerror(errno));
-            } else {
-                fprintf(stderr, "Warning: failed to open cgroup file %s: %s\n", path, strerror(errno));
-            }
+            DEBUG_LOG(rm, "Warning: failed to open cgroup file %s: %s\n", path, strerror(errno));
         }
         return -1;
     }
 
     ssize_t read_bytes = read(fd, buffer, size - 1);
     if (read_bytes == -1) {
-        if (rm) {
-            DEBUG_LOG(rm, "Warning: failed to read from cgroup file %s: %s\n", path, strerror(errno));
-        } else {
-            fprintf(stderr, "Warning: failed to read from cgroup file %s: %s\n", path, strerror(errno));
-        }
+        DEBUG_LOG(rm, "Warning: failed to read from cgroup file %s: %s\n", path, strerror(errno));
         close(fd);
         return -1;
     }
 
     if (read_bytes == 0) {
-        if (rm) {
-            DEBUG_LOG(rm, "Warning: cgroup file %s is empty\n", path);
-        }
+        // Empty files are normal for some cgroup entries (e.g. cgroup.procs can be empty).
+        // Treat as "no data" without logging to avoid noisy output.
         close(fd);
         return -1;
     }

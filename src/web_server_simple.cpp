@@ -150,10 +150,14 @@ std::string SimpleWebServer::getContainerListJSON() {
             }
 
             const char* state_names[] = {"CREATED", "RUNNING", "STOPPED", "DESTROYED"};
+            const char* state_str = "UNKNOWN";
+            if ((int)info->state >= 0 && (int)info->state < (int)(sizeof(state_names) / sizeof(state_names[0]))) {
+                state_str = state_names[info->state];
+            }
             json += "{";
             json += "\"id\":\"" + std::string(info->id) + "\",";
             json += "\"pid\":" + std::to_string(info->pid) + ",";
-            json += "\"state\":\"" + std::string(state_names[info->state]) + "\",";
+            json += "\"state\":\"" + std::string(state_str) + "\",";
             json += "\"created_at\":" + std::to_string(info->created_at) + ",";
             json += "\"started_at\":" + std::to_string(info->started_at) + ",";
             json += "\"stopped_at\":" + std::to_string(info->stopped_at);
@@ -517,7 +521,7 @@ std::string SimpleWebServer::generateHTML() {
 
         updateMonitor();
 
-        setInterval(updateMonitor, 1000);
+        setInterval(updateMonitor, 5000);
 
         document.addEventListener('keydown', function(e) {
             if (e.key === 'F5') {

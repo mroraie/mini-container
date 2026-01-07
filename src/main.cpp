@@ -30,6 +30,15 @@ static const char *state_names[] = {
     [CONTAINER_STOPPED] = "STOPPED",
     [CONTAINER_DESTROYED] = "DESTROYED"};
 
+static inline const char *safe_state_name(container_state_t state) {
+    int s = (int)state;
+    if (s < (int)CONTAINER_CREATED || s > (int)CONTAINER_DESTROYED) {
+        return "UNKNOWN";
+    }
+    const char *name = state_names[s];
+    return name ? name : "UNKNOWN";
+}
+
 void clear_screen() {
     printf("\033[2J\033[H");
 }
@@ -249,19 +258,23 @@ static int handle_list(int argc, char *argv[])
 
         if (info->created_at > 0)
         {
-            strftime(created_str, sizeof(created_str), "%H:%M:%S",
-                     localtime(&info->created_at));
+            struct tm *tm_created = localtime(&info->created_at);
+            if (tm_created) {
+                strftime(created_str, sizeof(created_str), "%H:%M:%S", tm_created);
+            }
         }
 
         if (info->started_at > 0)
         {
-            strftime(started_str, sizeof(started_str), "%H:%M:%S",
-                     localtime(&info->started_at));
+            struct tm *tm_started = localtime(&info->started_at);
+            if (tm_started) {
+                strftime(started_str, sizeof(started_str), "%H:%M:%S", tm_started);
+            }
         }
 
         printf("%-20s %-10s %-10d %-15s %-15s\n",
                info->id,
-               state_names[info->state],
+               safe_state_name(info->state),
                info->pid,
                created_str,
                started_str);
@@ -331,7 +344,7 @@ static int handle_info(int argc, char *argv[])
     }
 
     printf("Container ID: %s\n", info->id);
-    printf("State: %s\n", state_names[info->state]);
+    printf("State: %s\n", safe_state_name(info->state));
     printf("PID: %d\n", info->pid);
     printf("Created: %s", ctime(&info->created_at));
     if (info->started_at > 0)
@@ -449,7 +462,7 @@ void display_compact_monitor() {
         int max_display = (sorted_containers.size() > 10) ? 10 : sorted_containers.size();
         for (int i = 0; i < max_display; i++) {
             container_info_t* info = sorted_containers[i];
-            const char* state = state_names[info->state];
+            const char* state = safe_state_name(info->state);
             const char* state_color = COLOR_WHITE;
             
             if (info->state == CONTAINER_RUNNING) {
@@ -548,7 +561,7 @@ void display_monitor() {
                  });
             
             for (auto info : sorted_containers) {
-                const char* state = state_names[info->state];
+                const char* state = safe_state_name(info->state);
                 const char* state_color = COLOR_WHITE;
                 
                 if (info->state == CONTAINER_RUNNING) {
@@ -581,7 +594,10 @@ void display_monitor() {
                 
                 char created_str[20] = "";
                 if (info->created_at > 0) {
-                    strftime(created_str, sizeof(created_str), "%H:%M:%S", localtime(&info->created_at));
+                    struct tm *tm_created = localtime(&info->created_at);
+                    if (tm_created) {
+                        strftime(created_str, sizeof(created_str), "%H:%M:%S", tm_created);
+                    }
                 }
                 printf(" %-10s\n", created_str);
             }
@@ -612,7 +628,7 @@ void display_monitor() {
         
         tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
         
-        usleep(1000000); // 1 second
+        usleep(5000000); // 5 seconds
     }
     
     show_cursor();
@@ -1207,7 +1223,7 @@ void interactive_menu() {
         printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
         printf("\n");
         set_color(COLOR_YELLOW);
-        printf("Select option (auto-refresh every 1 second): ");
+        printf("Select option (auto-refresh every 5 seconds): ");
         reset_color();
         fflush(stdout);
         
@@ -1220,7 +1236,7 @@ void interactive_menu() {
         
         FD_ZERO(&readfds);
         FD_SET(STDIN_FILENO, &readfds);
-        timeout.tv_sec = 1;
+        timeout.tv_sec = 5;
         timeout.tv_usec = 0;
         
         int select_result = select(STDIN_FILENO + 1, &readfds, nullptr, nullptr, &timeout);
@@ -1322,7 +1338,7 @@ void interactive_menu() {
                 hide_cursor();
             }
         } else if (select_result == 0) {
-            // Timeout (1 second) - refresh screen automatically
+            // Timeout (5 seconds) - refresh screen automatically
             // Continue loop to refresh
         }
         
