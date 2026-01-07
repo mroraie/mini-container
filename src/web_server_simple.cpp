@@ -6,44 +6,39 @@
 #include <cstring>
 #include <sstream>
 #include <iostream>
-#include <thread>
-#include <atomic>
 
-class SimpleWebServer {
-public:
-    SimpleWebServer(container_manager_t* cm, int port = 808)
-        : cm_(cm), port_(port), running_(false), server_socket_(-1) {
+SimpleWebServer::SimpleWebServer(container_manager_t* cm, int port)
+    : cm_(cm), port_(port), running_(false), server_socket_(-1) {
+}
+
+SimpleWebServer::~SimpleWebServer() {
+    stop();
+}
+
+void SimpleWebServer::start() {
+    if (running_) return;
+
+    running_ = true;
+    server_thread_ = std::thread(&SimpleWebServer::serverThread, this);
+}
+
+void SimpleWebServer::stop() {
+    if (!running_) return;
+
+    running_ = false;
+
+    if (server_socket_ != -1) {
+        close(server_socket_);
+        server_socket_ = -1;
     }
 
-    ~SimpleWebServer() {
-        stop();
+    if (server_thread_.joinable()) {
+        server_thread_.join();
     }
+}
 
-    void start() {
-        if (running_) return;
-
-        running_ = true;
-        server_thread_ = std::thread(&SimpleWebServer::serverThread, this);
-    }
-
-    void stop() {
-        if (!running_) return;
-
-        running_ = false;
-
-        if (server_socket_ != -1) {
-            close(server_socket_);
-            server_socket_ = -1;
-        }
-
-        if (server_thread_.joinable()) {
-            server_thread_.join();
-        }
-    }
-
-private:
-    void serverThread() {
-        // Create socket
+void SimpleWebServer::serverThread() {
+    // Create socket
         server_socket_ = socket(AF_INET, SOCK_STREAM, 0);
         if (server_socket_ == -1) {
             std::cerr << "Failed to create socket: " << strerror(errno) << std::endl;
@@ -105,9 +100,9 @@ private:
 
         close(server_socket_);
         server_socket_ = -1;
-    }
+}
 
-    std::string handleRequest(const std::string& request) {
+std::string SimpleWebServer::handleRequest(const std::string& request) {
         std::istringstream iss(request);
         std::string method, path, version;
         iss >> method >> path >> version;
@@ -142,9 +137,9 @@ private:
                   "Connection: close\r\n\r\n"
                   "Method Not Allowed";
         }
-    }
+}
 
-    std::string getContainerListJSON() {
+std::string SimpleWebServer::getContainerListJSON() {
         std::string json = "{\"containers\":[";
 
         int count;
@@ -176,9 +171,9 @@ private:
 
         json += "]}";
         return json;
-    }
+}
 
-    std::string generateHTML() {
+std::string SimpleWebServer::generateHTML() {
         return R"HTML(
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
@@ -556,12 +551,4 @@ private:
 </body>
 </html>
 )HTML";
-    }
-
-    container_manager_t* cm_;
-    int port_;
-    std::thread server_thread_;
-    std::atomic<bool> running_;
-    int server_socket_;
-};
-
+}
