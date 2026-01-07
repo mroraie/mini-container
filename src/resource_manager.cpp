@@ -375,6 +375,35 @@ int resource_manager_create_cgroup(resource_manager_t *rm,
     return 0;
 }
 
+// Helper function to add all threads of a process to cgroup
+static int add_all_threads_to_cgroup(resource_manager_t *rm, const char *container_id, pid_t pid, const char *cgroup_path) {
+    char task_dir_path[BUF_SIZE];
+    snprintf(task_dir_path, sizeof(task_dir_path), "/proc/%d/task", pid);
+    
+    DIR *dir = opendir(task_dir_path);
+    if (!dir) {
+        // If /proc/<pid>/task doesn't exist, just add the main PID
+        char pid_str[32];
+        snprintf(pid_str, sizeof(pid_str), "%d", pid);
+        return write_file(cgroup_path, pid_str, rm);
+    }
+    
+    struct dirent *entry;
+    int added = 0;
+    while ((entry = readdir(dir)) != nullptr) {
+        if (entry->d_name[0] == '.') continue; // Skip . and ..
+        
+        char tid_str[32];
+        snprintf(tid_str, sizeof(tid_str), "%s", entry->d_name);
+        if (write_file(cgroup_path, tid_str, rm) == 0) {
+            added = 1;
+        }
+    }
+    closedir(dir);
+    
+    return added ? 0 : -1;
+}
+
 int resource_manager_add_process(resource_manager_t *rm,
                                 const char *container_id,
                                 pid_t pid) {
@@ -388,7 +417,7 @@ int resource_manager_add_process(resource_manager_t *rm,
     snprintf(pid_str, sizeof(pid_str), "%d", pid);
 
     if (rm->version == CGROUP_V2) {
-        // cgroup2 uses cgroup.procs
+        // cgroup2 uses cgroup.procs (automatically includes all threads)
         snprintf(path, sizeof(path), "%s/%s_%s/cgroup.procs", CGROUP_ROOT, rm->cgroup_path, container_id);
         DEBUG_LOG(rm, "Debug: Adding process %d to cgroup v2: %s\n", pid, path);
         if (write_file(path, pid_str, rm) != 0) {
@@ -397,30 +426,30 @@ int resource_manager_add_process(resource_manager_t *rm,
         }
         DEBUG_LOG(rm, "Debug: Successfully added process %d to cgroup v2\n", pid);
     } else {
-        // cgroup v1 uses tasks
+        // cgroup v1 uses tasks - need to add all threads
         int added = 0;
         
         // Try cpu,cpuacct first (most common)
         snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
         DEBUG_LOG(rm, "Debug: Trying to add process %d to cgroup v1: %s\n", pid, path);
-        if (write_file(path, pid_str, rm) == 0) {
+        if (add_all_threads_to_cgroup(rm, container_id, pid, path) == 0) {
             added = 1;
-            DEBUG_LOG(rm, "Debug: Successfully added process %d to cpu,cpuacct cgroup\n", pid);
+            DEBUG_LOG(rm, "Debug: Successfully added process %d threads to cpu,cpuacct cgroup\n", pid);
         } else {
             DEBUG_LOG(rm, "Debug: Failed to add to cpu,cpuacct (errno=%d: %s), trying fallback...\n", errno, strerror(errno));
             // Fallback to separate cpu and cpuacct
             snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
-            if (write_file(path, pid_str, rm) == 0) {
+            if (add_all_threads_to_cgroup(rm, container_id, pid, path) == 0) {
                 added = 1;
-                DEBUG_LOG(rm, "Debug: Successfully added process %d to CPU cgroup\n", pid);
+                DEBUG_LOG(rm, "Debug: Successfully added process %d threads to CPU cgroup\n", pid);
             } else {
-                DEBUG_LOG(rm, "Warning: failed to add process %d to CPU cgroup: %s (errno=%d: %s)\n", pid, path, errno, strerror(errno));
+                DEBUG_LOG(rm, "Warning: failed to add process %d threads to CPU cgroup: %s (errno=%d: %s)\n", pid, path, errno, strerror(errno));
             }
             
             snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
-            if (write_file(path, pid_str, rm) == 0) {
+            if (add_all_threads_to_cgroup(rm, container_id, pid, path) == 0) {
                 added = 1;
-                DEBUG_LOG(rm, "Debug: Successfully added process %d to cpuacct cgroup\n", pid);
+                DEBUG_LOG(rm, "Debug: Successfully added process %d threads to cpuacct cgroup\n", pid);
             } else {
                 DEBUG_LOG(rm, "Debug: Failed to add to cpuacct cgroup (errno=%d: %s)\n", errno, strerror(errno));
             }
@@ -432,12 +461,12 @@ int resource_manager_add_process(resource_manager_t *rm,
         }
 
         snprintf(path, sizeof(path), "%s/%s_%s/tasks", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
-        DEBUG_LOG(rm, "Debug: Adding process %d to memory cgroup: %s\n", pid, path);
-        if (write_file(path, pid_str, rm) != 0) {
-            DEBUG_LOG(rm, "Warning: failed to add process %d to memory cgroup: %s (errno=%d: %s)\n", pid, path, errno, strerror(errno));
+        DEBUG_LOG(rm, "Debug: Adding process %d threads to memory cgroup: %s\n", pid, path);
+        if (add_all_threads_to_cgroup(rm, container_id, pid, path) != 0) {
+            DEBUG_LOG(rm, "Warning: failed to add process %d threads to memory cgroup: %s (errno=%d: %s)\n", pid, path, errno, strerror(errno));
             // Don't fail completely if memory cgroup fails
         } else {
-            DEBUG_LOG(rm, "Debug: Successfully added process %d to memory cgroup\n", pid);
+            DEBUG_LOG(rm, "Debug: Successfully added process %d threads to memory cgroup\n", pid);
         }
     }
 
@@ -495,6 +524,10 @@ int resource_manager_get_stats(resource_manager_t *rm,
 
     char path[BUF_SIZE];
     char buffer[BUF_SIZE];
+    
+    // Initialize to 0
+    if (cpu_usage) *cpu_usage = 0;
+    if (memory_usage) *memory_usage = 0;
     
     // Debug: Print cgroup path being checked
     DEBUG_LOG(rm, "Debug: Getting stats for container %s, cgroup_path=%s, version=%s\n", 
