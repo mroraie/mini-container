@@ -344,6 +344,7 @@ int resource_manager_create_cgroup(resource_manager_t *rm,
 }
 
 static int add_all_threads_to_cgroup(resource_manager_t *rm, const char *container_id, pid_t pid, const char *cgroup_path) {
+    (void)container_id;
     char task_dir_path[BUF_SIZE];
     snprintf(task_dir_path, sizeof(task_dir_path), "/proc/%d/task", pid);
     
@@ -361,7 +362,8 @@ static int add_all_threads_to_cgroup(resource_manager_t *rm, const char *contain
         if (entry->d_name[0] == '.') continue; // Skip . and ..
         
         char tid_str[32];
-        snprintf(tid_str, sizeof(tid_str), "%s", entry->d_name);
+        strncpy(tid_str, entry->d_name, sizeof(tid_str) - 1);
+        tid_str[sizeof(tid_str) - 1] = '\0';
         if (write_file(cgroup_path, tid_str, rm) == 0) {
             added = 1;
         }
