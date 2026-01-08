@@ -2076,7 +2076,7 @@ void interactive_menu() {
 
 int main(int argc, char *argv[])
 {
-    if (container_manager_init(&cm, 10) != 0)
+    if (container_manager_init(&cm, 10000) != 0)
     {
         fprintf(stderr, "Failed to initialize container manager\n");
         return EXIT_FAILURE;

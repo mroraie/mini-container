@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
         port = atoi(argv[1]);
     }
 
-    if (container_manager_init(&cm, 10) != 0) {
+    if (container_manager_init(&cm, 10000) != 0) {
         cerr << "Failed to initialize container manager" << endl;
         return EXIT_FAILURE;
     }

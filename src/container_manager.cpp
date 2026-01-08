@@ -45,8 +45,14 @@ static container_info_t *find_container(container_manager_t *cm, const char *con
 
 static int add_container(container_manager_t *cm, container_info_t *info) {
     if (cm->container_count >= cm->max_containers) {
-        fprintf(stderr, "Error: maximum containers reached\n");
-        return -1;
+        size_t new_size = cm->max_containers * 2;
+        container_info_t **new_containers = static_cast<container_info_t**>(realloc(cm->containers, new_size * sizeof(container_info_t *)));
+        if (!new_containers) {
+            fprintf(stderr, "Error: failed to reallocate containers array\n");
+            return -1;
+        }
+        cm->containers = new_containers;
+        cm->max_containers = new_size;
     }
 
     cm->containers[cm->container_count++] = info;
