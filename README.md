@@ -136,27 +136,6 @@ sudo ./mini-container
 # گزینه 7: Run Tests
 ```
 
-### تست‌های منو (گزینه‌های 8-17)
-
-در منوی اصلی می‌توانید با انتخاب گزینه‌های 8 تا 17، کانتینرهای تست مختلف را ایجاد کنید:
-
-- **گزینه 8**: CPU Intensive Test - 4 فرآیند `yes` همزمان
-- **گزینه 9**: RAM Intensive Test - تخصیص 150MB حافظه
-- **گزینه 10**: CPU+RAM Heavy Test - تست ترکیبی CPU و RAM
-- **گزینه 11**: CPU Calc Test - محاسبات Python سنگین
-- **گزینه 12**: Memory Stress Test - تخصیص 150MB حافظه
-- **گزینه 13**: Mixed Workload Test - CPU + I/O همزمان
-- **گزینه 14**: High CPU Test - 3 فرآیند `yes`
-- **گزینه 15**: High Memory Test - تخصیص 200MB حافظه
-- **گزینه 16**: Balanced Test - کاربرد متعادل CPU و RAM
-- **گزینه 17**: Max Stress Test - 5 فرآیند `yes` + محاسبات سنگین
-
-**مشخصات مشترک همه کانتینرهای تست:**
-- Memory Limit: 128 MB
-- CPU Limit: 5% یک هسته (quota: 5000us, period: 100000us)
-- CPU Shares: 512
-- Runtime: 600 ثانیه (10 دقیقه)
-
 ### فرمت دستورات Memory و CPU
 
 #### محدودیت Memory (حافظه)
