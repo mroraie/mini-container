@@ -1339,6 +1339,446 @@ void init_containers() {
     
 }
 
+void create_test_container_cpu_intensive() {
+    time_t base_time = time(nullptr);
+    const int runtime_seconds = 600;
+    char cmd_buffer[512];
+    const unsigned long memory_limit = 1024 * 1024 * 1024;
+    const int cpu_quota_us = 50000;
+    const int cpu_period_us = 100000;
+    
+    container_config_t config;
+    namespace_config_init(&config.ns_config);
+    resource_limits_init(&config.res_limits);
+    fs_config_init(&config.fs_config);
+    
+    char container_id[64];
+    snprintf(container_id, sizeof(container_id), "cpu_intensive_%ld", base_time);
+    config.id = strdup(container_id);
+    config.res_limits.memory.limit_bytes = memory_limit;
+    config.res_limits.cpu.quota_us = cpu_quota_us;
+    config.res_limits.cpu.period_us = cpu_period_us;
+    config.res_limits.cpu.shares = 512;
+    config.ns_config.hostname = strdup("cpu-intensive");
+    config.fs_config.root_path = strdup("/");
+    
+    vector<char*> args;
+    args.push_back(strdup("/bin/sh"));
+    args.push_back(strdup("-c"));
+    snprintf(cmd_buffer, sizeof(cmd_buffer), "for i in 1 2 3 4; do yes > /dev/null & done; sleep %d", runtime_seconds);
+    args.push_back(strdup(cmd_buffer));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+        printf("Container %s created successfully\n", container_id);
+        } else {
+        printf("Failed to create container %s\n", container_id);
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.id);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+void create_test_container_ram_intensive() {
+    time_t base_time = time(nullptr);
+    const int runtime_seconds = 600;
+    char cmd_buffer[512];
+    const unsigned long memory_limit = 1024 * 1024 * 1024;
+    const int cpu_quota_us = 50000;
+    const int cpu_period_us = 100000;
+    
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+    snprintf(container_id, sizeof(container_id), "ram_intensive_%ld", base_time);
+        config.id = strdup(container_id);
+    config.res_limits.memory.limit_bytes = memory_limit;
+    config.res_limits.cpu.quota_us = cpu_quota_us;
+    config.res_limits.cpu.period_us = cpu_period_us;
+    config.res_limits.cpu.shares = 512;
+    config.ns_config.hostname = strdup("ram-intensive");
+        config.fs_config.root_path = strdup("/");
+        
+        vector<char*> args;
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+    snprintf(cmd_buffer, sizeof(cmd_buffer), "python3 -c 'a = [bytearray(50*1024*1024) for _ in range(3)]; import time; time.sleep(%d)'", runtime_seconds);
+    args.push_back(strdup(cmd_buffer));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+        printf("Container %s created successfully\n", container_id);
+        } else {
+        printf("Failed to create container %s\n", container_id);
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.id);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+void create_test_container_cpu_ram_heavy() {
+    time_t base_time = time(nullptr);
+    const int runtime_seconds = 600;
+    char cmd_buffer[512];
+    const unsigned long memory_limit = 1024 * 1024 * 1024;
+    const int cpu_quota_us = 50000;
+    const int cpu_period_us = 100000;
+    
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+    snprintf(container_id, sizeof(container_id), "cpu_ram_heavy_%ld", base_time);
+        config.id = strdup(container_id);
+    config.res_limits.memory.limit_bytes = memory_limit;
+    config.res_limits.cpu.quota_us = cpu_quota_us;
+    config.res_limits.cpu.period_us = cpu_period_us;
+    config.res_limits.cpu.shares = 512;
+    config.ns_config.hostname = strdup("cpu-ram-heavy");
+        config.fs_config.root_path = strdup("/");
+        
+        vector<char*> args;
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+    snprintf(cmd_buffer, sizeof(cmd_buffer), "yes > /dev/null & python3 -c 'a = bytearray(120*1024*1024); import time; [i*i for i in range(10000000)]; time.sleep(%d)'", runtime_seconds);
+    args.push_back(strdup(cmd_buffer));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+        printf("Container %s created successfully\n", container_id);
+        } else {
+        printf("Failed to create container %s\n", container_id);
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.id);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+void create_test_container_cpu_calc() {
+    time_t base_time = time(nullptr);
+    const int runtime_seconds = 600;
+    char cmd_buffer[512];
+    const unsigned long memory_limit = 1024 * 1024 * 1024;
+    const int cpu_quota_us = 50000;
+    const int cpu_period_us = 100000;
+    
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+    snprintf(container_id, sizeof(container_id), "cpu_calc_%ld", base_time);
+        config.id = strdup(container_id);
+    config.res_limits.memory.limit_bytes = memory_limit;
+    config.res_limits.cpu.quota_us = cpu_quota_us;
+    config.res_limits.cpu.period_us = cpu_period_us;
+    config.res_limits.cpu.shares = 512;
+    config.ns_config.hostname = strdup("cpu-calc");
+        config.fs_config.root_path = strdup("/");
+        
+        vector<char*> args;
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+    snprintf(cmd_buffer, sizeof(cmd_buffer), "python3 -c 'import time; start=time.time(); [sum(range(i)) for i in range(50000)]; time.sleep(%d)'", runtime_seconds);
+    args.push_back(strdup(cmd_buffer));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+        printf("Container %s created successfully\n", container_id);
+        } else {
+        printf("Failed to create container %s\n", container_id);
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.id);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+void create_test_container_mem_stress() {
+    time_t base_time = time(nullptr);
+    const int runtime_seconds = 600;
+    char cmd_buffer[512];
+    const unsigned long memory_limit = 1024 * 1024 * 1024;
+    const int cpu_quota_us = 50000;
+    const int cpu_period_us = 100000;
+    
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+    snprintf(container_id, sizeof(container_id), "mem_stress_%ld", base_time);
+        config.id = strdup(container_id);
+    config.res_limits.memory.limit_bytes = memory_limit;
+    config.res_limits.cpu.quota_us = cpu_quota_us;
+    config.res_limits.cpu.period_us = cpu_period_us;
+    config.res_limits.cpu.shares = 512;
+    config.ns_config.hostname = strdup("mem-stress");
+        config.fs_config.root_path = strdup("/");
+        
+        vector<char*> args;
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+    snprintf(cmd_buffer, sizeof(cmd_buffer), "python3 -c 'import time; data = [bytearray(30*1024*1024) for _ in range(5)]; time.sleep(%d)'", runtime_seconds);
+    args.push_back(strdup(cmd_buffer));
+        args.push_back(nullptr);
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+        printf("Container %s created successfully\n", container_id);
+        } else {
+        printf("Failed to create container %s\n", container_id);
+        }
+        
+        for (auto arg : args) if (arg) free(arg);
+        free(config.id);
+        free(config.ns_config.hostname);
+        free(config.fs_config.root_path);
+    }
+    
+void create_test_container_mixed_workload() {
+    time_t base_time = time(nullptr);
+    const int runtime_seconds = 600;
+    char cmd_buffer[512];
+    const unsigned long memory_limit = 1024 * 1024 * 1024;
+    const int cpu_quota_us = 50000;
+    const int cpu_period_us = 100000;
+    
+    container_config_t config;
+    namespace_config_init(&config.ns_config);
+    resource_limits_init(&config.res_limits);
+    fs_config_init(&config.fs_config);
+    
+    char container_id[64];
+    snprintf(container_id, sizeof(container_id), "mixed_workload_%ld", base_time);
+    config.id = strdup(container_id);
+    config.res_limits.memory.limit_bytes = memory_limit;
+    config.res_limits.cpu.quota_us = cpu_quota_us;
+    config.res_limits.cpu.period_us = cpu_period_us;
+    config.res_limits.cpu.shares = 512;
+    config.ns_config.hostname = strdup("mixed-workload");
+    config.fs_config.root_path = strdup("/");
+    
+    vector<char*> args;
+    args.push_back(strdup("/bin/sh"));
+    args.push_back(strdup("-c"));
+    snprintf(cmd_buffer, sizeof(cmd_buffer), "yes > /dev/null & dd if=/dev/zero of=/tmp/test bs=1M count=50 status=none & sleep %d", runtime_seconds);
+    args.push_back(strdup(cmd_buffer));
+    args.push_back(nullptr);
+    config.command = args.data();
+    config.command_argc = 3;
+    
+    if (container_manager_run(&cm, &config) == 0) {
+        printf("Container %s created successfully\n", container_id);
+    } else {
+        printf("Failed to create container %s\n", container_id);
+    }
+    
+    for (auto arg : args) if (arg) free(arg);
+    free(config.id);
+    free(config.ns_config.hostname);
+    free(config.fs_config.root_path);
+}
+
+void create_test_container_high_cpu() {
+    time_t base_time = time(nullptr);
+    const int runtime_seconds = 600;
+    char cmd_buffer[512];
+    const unsigned long memory_limit = 1024 * 1024 * 1024;
+    const int cpu_quota_us = 50000;
+    const int cpu_period_us = 100000;
+    
+    container_config_t config;
+    namespace_config_init(&config.ns_config);
+    resource_limits_init(&config.res_limits);
+    fs_config_init(&config.fs_config);
+    
+    char container_id[64];
+    snprintf(container_id, sizeof(container_id), "high_cpu_%ld", base_time);
+    config.id = strdup(container_id);
+    config.res_limits.memory.limit_bytes = memory_limit;
+    config.res_limits.cpu.quota_us = cpu_quota_us;
+    config.res_limits.cpu.period_us = cpu_period_us;
+    config.res_limits.cpu.shares = 512;
+    config.ns_config.hostname = strdup("high-cpu");
+    config.fs_config.root_path = strdup("/");
+    
+    vector<char*> args;
+    args.push_back(strdup("/bin/sh"));
+    args.push_back(strdup("-c"));
+    snprintf(cmd_buffer, sizeof(cmd_buffer), "for i in 1 2 3; do yes > /dev/null & done; sleep %d", runtime_seconds);
+    args.push_back(strdup(cmd_buffer));
+    args.push_back(nullptr);
+    config.command = args.data();
+    config.command_argc = 3;
+    
+    if (container_manager_run(&cm, &config) == 0) {
+        printf("Container %s created successfully\n", container_id);
+    } else {
+        printf("Failed to create container %s\n", container_id);
+    }
+    
+    for (auto arg : args) if (arg) free(arg);
+    free(config.id);
+    free(config.ns_config.hostname);
+    free(config.fs_config.root_path);
+}
+
+void create_test_container_high_mem() {
+    time_t base_time = time(nullptr);
+    const int runtime_seconds = 600;
+    char cmd_buffer[512];
+    const unsigned long memory_limit = 1024 * 1024 * 1024;
+    const int cpu_quota_us = 50000;
+    const int cpu_period_us = 100000;
+    
+    container_config_t config;
+    namespace_config_init(&config.ns_config);
+    resource_limits_init(&config.res_limits);
+    fs_config_init(&config.fs_config);
+    
+    char container_id[64];
+    snprintf(container_id, sizeof(container_id), "high_mem_%ld", base_time);
+    config.id = strdup(container_id);
+    config.res_limits.memory.limit_bytes = memory_limit;
+    config.res_limits.cpu.quota_us = cpu_quota_us;
+    config.res_limits.cpu.period_us = cpu_period_us;
+    config.res_limits.cpu.shares = 512;
+    config.ns_config.hostname = strdup("high-mem");
+    config.fs_config.root_path = strdup("/");
+    
+    vector<char*> args;
+    args.push_back(strdup("/bin/sh"));
+    args.push_back(strdup("-c"));
+    snprintf(cmd_buffer, sizeof(cmd_buffer), "python3 -c 'a = [bytearray(40*1024*1024) for _ in range(5)]; import time; time.sleep(%d)'", runtime_seconds);
+    args.push_back(strdup(cmd_buffer));
+    args.push_back(nullptr);
+    config.command = args.data();
+    config.command_argc = 3;
+    
+    if (container_manager_run(&cm, &config) == 0) {
+        printf("Container %s created successfully\n", container_id);
+    } else {
+        printf("Failed to create container %s\n", container_id);
+    }
+    
+    for (auto arg : args) if (arg) free(arg);
+    free(config.id);
+    free(config.ns_config.hostname);
+    free(config.fs_config.root_path);
+}
+
+void create_test_container_balanced() {
+    time_t base_time = time(nullptr);
+    const int runtime_seconds = 600;
+    char cmd_buffer[512];
+    const unsigned long memory_limit = 1024 * 1024 * 1024;
+    const int cpu_quota_us = 50000;
+    const int cpu_period_us = 100000;
+    
+    container_config_t config;
+    namespace_config_init(&config.ns_config);
+    resource_limits_init(&config.res_limits);
+    fs_config_init(&config.fs_config);
+    
+    char container_id[64];
+    snprintf(container_id, sizeof(container_id), "balanced_%ld", base_time);
+    config.id = strdup(container_id);
+    config.res_limits.memory.limit_bytes = memory_limit;
+    config.res_limits.cpu.quota_us = cpu_quota_us;
+    config.res_limits.cpu.period_us = cpu_period_us;
+    config.res_limits.cpu.shares = 512;
+    config.ns_config.hostname = strdup("balanced");
+    config.fs_config.root_path = strdup("/");
+    
+    vector<char*> args;
+    args.push_back(strdup("/bin/sh"));
+    args.push_back(strdup("-c"));
+    snprintf(cmd_buffer, sizeof(cmd_buffer), "yes > /dev/null & python3 -c 'a = bytearray(100*1024*1024); import time; time.sleep(%d)'", runtime_seconds);
+    args.push_back(strdup(cmd_buffer));
+    args.push_back(nullptr);
+    config.command = args.data();
+    config.command_argc = 3;
+    
+    if (container_manager_run(&cm, &config) == 0) {
+        printf("Container %s created successfully\n", container_id);
+    } else {
+        printf("Failed to create container %s\n", container_id);
+    }
+    
+    for (auto arg : args) if (arg) free(arg);
+    free(config.id);
+    free(config.ns_config.hostname);
+    free(config.fs_config.root_path);
+}
+
+void create_test_container_max_stress() {
+    time_t base_time = time(nullptr);
+    const int runtime_seconds = 600;
+    char cmd_buffer[512];
+    const unsigned long memory_limit = 1024 * 1024 * 1024;
+    const int cpu_quota_us = 50000;
+    const int cpu_period_us = 100000;
+    
+    container_config_t config;
+    namespace_config_init(&config.ns_config);
+    resource_limits_init(&config.res_limits);
+    fs_config_init(&config.fs_config);
+    
+    char container_id[64];
+    snprintf(container_id, sizeof(container_id), "max_stress_%ld", base_time);
+    config.id = strdup(container_id);
+    config.res_limits.memory.limit_bytes = memory_limit;
+    config.res_limits.cpu.quota_us = cpu_quota_us;
+    config.res_limits.cpu.period_us = cpu_period_us;
+    config.res_limits.cpu.shares = 512;
+    config.ns_config.hostname = strdup("max-stress");
+    config.fs_config.root_path = strdup("/");
+    
+    vector<char*> args;
+    args.push_back(strdup("/bin/sh"));
+    args.push_back(strdup("-c"));
+    snprintf(cmd_buffer, sizeof(cmd_buffer), "for i in 1 2 3 4 5; do yes > /dev/null & done; python3 -c 'a = [bytearray(35*1024*1024) for _ in range(5)]; import time; [i**2 for i in range(2000000)]; time.sleep(%d)'", runtime_seconds);
+    args.push_back(strdup(cmd_buffer));
+    args.push_back(nullptr);
+    config.command = args.data();
+    config.command_argc = 3;
+    
+    if (container_manager_run(&cm, &config) == 0) {
+        printf("Container %s created successfully\n", container_id);
+    } else {
+        printf("Failed to create container %s\n", container_id);
+    }
+    
+    for (auto arg : args) if (arg) free(arg);
+    free(config.id);
+    free(config.ns_config.hostname);
+    free(config.fs_config.root_path);
+}
+
 void signal_handler(int signum) {
     (void)signum;
     running = false;
@@ -1498,7 +1938,10 @@ void interactive_menu() {
         printf("╠══════════════════════════════════════════════════════════════════════════════╣\n");
         printf("║  1. Create Container         2. Full Monitor (htop)     3. List Containers  ║\n");
         printf("║  4. Stop Container           5. Destroy Container        6. Container Info  ║\n");
-        printf("║  7. Run Tests                0. Exit                                        ║\n");
+        printf("║  7. Run Tests                8. CPU Intensive Test      9. RAM Intensive    ║\n");
+        printf("║ 10. CPU+RAM Heavy           11. CPU Calc               12. Memory Stress   ║\n");
+        printf("║ 13. Mixed Workload          14. High CPU               15. High Memory    ║\n");
+        printf("║ 16. Balanced                17. Max Stress             0. Exit            ║\n");
         printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
         printf("\n");
         set_color(COLOR_YELLOW);
@@ -1522,6 +1965,29 @@ void interactive_menu() {
         if (select_result > 0 && FD_ISSET(STDIN_FILENO, &readfds)) {
             if (read(STDIN_FILENO, &choice, 1) > 0) {
                 int option = choice - '0';
+                
+                if (option >= 0 && option <= 9) {
+                    char second_char = 0;
+                    fd_set readfds2;
+                    struct timeval timeout2;
+                    FD_ZERO(&readfds2);
+                    FD_SET(STDIN_FILENO, &readfds2);
+                    timeout2.tv_sec = 0;
+                    timeout2.tv_usec = 100000;
+                    if (select(STDIN_FILENO + 1, &readfds2, nullptr, nullptr, &timeout2) > 0) {
+                        if (FD_ISSET(STDIN_FILENO, &readfds2)) {
+                            if (read(STDIN_FILENO, &second_char, 1) > 0) {
+                                int second_digit = second_char - '0';
+                                if (second_digit >= 0 && second_digit <= 9) {
+                                    int two_digit_option = option * 10 + second_digit;
+                                    if (two_digit_option >= 10 && two_digit_option <= 17) {
+                                        option = two_digit_option;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 
                 tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
                 show_cursor();
@@ -1599,6 +2065,66 @@ void interactive_menu() {
                         clear_screen();
                         run_tests();
                         break;
+                    case 8:
+                        clear_screen();
+                        create_test_container_cpu_intensive();
+                        printf("\nPress Enter to continue...");
+                        getchar();
+                        break;
+                    case 9:
+                        clear_screen();
+                        create_test_container_ram_intensive();
+                        printf("\nPress Enter to continue...");
+                        getchar();
+                        break;
+                    case 10:
+                        clear_screen();
+                        create_test_container_cpu_ram_heavy();
+                        printf("\nPress Enter to continue...");
+                        getchar();
+                        break;
+                    case 11:
+                        clear_screen();
+                        create_test_container_cpu_calc();
+                        printf("\nPress Enter to continue...");
+                        getchar();
+                        break;
+                    case 12:
+                        clear_screen();
+                        create_test_container_mem_stress();
+                        printf("\nPress Enter to continue...");
+                        getchar();
+                        break;
+                    case 13:
+                        clear_screen();
+                        create_test_container_mixed_workload();
+                        printf("\nPress Enter to continue...");
+                        getchar();
+                        break;
+                    case 14:
+                        clear_screen();
+                        create_test_container_high_cpu();
+                        printf("\nPress Enter to continue...");
+                        getchar();
+                        break;
+                    case 15:
+                        clear_screen();
+                        create_test_container_high_mem();
+                        printf("\nPress Enter to continue...");
+                        getchar();
+                        break;
+                    case 16:
+                        clear_screen();
+                        create_test_container_balanced();
+                        printf("\nPress Enter to continue...");
+                        getchar();
+                        break;
+                    case 17:
+                        clear_screen();
+                        create_test_container_max_stress();
+                        printf("\nPress Enter to continue...");
+                        getchar();
+                        break;
                     case 0:
                         running = false;
                         break;
@@ -1628,8 +2154,6 @@ int main(int argc, char *argv[])
     {
         fprintf(stderr, "Warning: container operations typically require root privileges\n");
     }
-
-    init_containers();
 
     // Start web server automatically
     web_server = new SimpleWebServer(&cm, 808);
