@@ -152,8 +152,8 @@ sudo ./mini-container
 - **گزینه 17**: Max Stress Test - 5 فرآیند `yes` + محاسبات سنگین
 
 **مشخصات مشترک همه کانتینرهای تست:**
-- Memory Limit: 1GB (1024 MB)
-- CPU Limit: 50% یک هسته (quota: 50000us, period: 100000us)
+- Memory Limit: 128 MB
+- CPU Limit: 5% یک هسته (quota: 5000us, period: 100000us)
 - CPU Shares: 512
 - Runtime: 600 ثانیه (10 دقیقه)
 

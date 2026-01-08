@@ -1004,8 +1004,8 @@ void init_containers() {
     const int runtime_seconds = 600;
     char cmd_buffer[512];
     
-    const unsigned long memory_limit = 1024 * 1024 * 1024;
-    const int cpu_quota_us = 50000;
+    const unsigned long memory_limit = 128 * 1024 * 1024;
+    const int cpu_quota_us = 5000;
     const int cpu_period_us = 100000;
     {
         container_config_t config;
@@ -1343,8 +1343,8 @@ void create_test_container_cpu_intensive() {
     time_t base_time = time(nullptr);
     const int runtime_seconds = 600;
     char cmd_buffer[512];
-    const unsigned long memory_limit = 1024 * 1024 * 1024;
-    const int cpu_quota_us = 50000;
+    const unsigned long memory_limit = 128 * 1024 * 1024;
+    const int cpu_quota_us = 5000;
     const int cpu_period_us = 100000;
     
     container_config_t config;
@@ -1387,8 +1387,8 @@ void create_test_container_ram_intensive() {
     time_t base_time = time(nullptr);
     const int runtime_seconds = 600;
     char cmd_buffer[512];
-    const unsigned long memory_limit = 1024 * 1024 * 1024;
-    const int cpu_quota_us = 50000;
+    const unsigned long memory_limit = 128 * 1024 * 1024;
+    const int cpu_quota_us = 5000;
     const int cpu_period_us = 100000;
     
         container_config_t config;
@@ -1431,8 +1431,8 @@ void create_test_container_cpu_ram_heavy() {
     time_t base_time = time(nullptr);
     const int runtime_seconds = 600;
     char cmd_buffer[512];
-    const unsigned long memory_limit = 1024 * 1024 * 1024;
-    const int cpu_quota_us = 50000;
+    const unsigned long memory_limit = 128 * 1024 * 1024;
+    const int cpu_quota_us = 5000;
     const int cpu_period_us = 100000;
     
         container_config_t config;
@@ -1475,8 +1475,8 @@ void create_test_container_cpu_calc() {
     time_t base_time = time(nullptr);
     const int runtime_seconds = 600;
     char cmd_buffer[512];
-    const unsigned long memory_limit = 1024 * 1024 * 1024;
-    const int cpu_quota_us = 50000;
+    const unsigned long memory_limit = 128 * 1024 * 1024;
+    const int cpu_quota_us = 5000;
     const int cpu_period_us = 100000;
     
         container_config_t config;
@@ -1519,8 +1519,8 @@ void create_test_container_mem_stress() {
     time_t base_time = time(nullptr);
     const int runtime_seconds = 600;
     char cmd_buffer[512];
-    const unsigned long memory_limit = 1024 * 1024 * 1024;
-    const int cpu_quota_us = 50000;
+    const unsigned long memory_limit = 128 * 1024 * 1024;
+    const int cpu_quota_us = 5000;
     const int cpu_period_us = 100000;
     
         container_config_t config;
@@ -1563,8 +1563,8 @@ void create_test_container_mixed_workload() {
     time_t base_time = time(nullptr);
     const int runtime_seconds = 600;
     char cmd_buffer[512];
-    const unsigned long memory_limit = 1024 * 1024 * 1024;
-    const int cpu_quota_us = 50000;
+    const unsigned long memory_limit = 128 * 1024 * 1024;
+    const int cpu_quota_us = 5000;
     const int cpu_period_us = 100000;
     
     container_config_t config;
@@ -1607,8 +1607,8 @@ void create_test_container_high_cpu() {
     time_t base_time = time(nullptr);
     const int runtime_seconds = 600;
     char cmd_buffer[512];
-    const unsigned long memory_limit = 1024 * 1024 * 1024;
-    const int cpu_quota_us = 50000;
+    const unsigned long memory_limit = 128 * 1024 * 1024;
+    const int cpu_quota_us = 5000;
     const int cpu_period_us = 100000;
     
     container_config_t config;
@@ -1651,8 +1651,8 @@ void create_test_container_high_mem() {
     time_t base_time = time(nullptr);
     const int runtime_seconds = 600;
     char cmd_buffer[512];
-    const unsigned long memory_limit = 1024 * 1024 * 1024;
-    const int cpu_quota_us = 50000;
+    const unsigned long memory_limit = 128 * 1024 * 1024;
+    const int cpu_quota_us = 5000;
     const int cpu_period_us = 100000;
     
     container_config_t config;
@@ -1695,8 +1695,8 @@ void create_test_container_balanced() {
     time_t base_time = time(nullptr);
     const int runtime_seconds = 600;
     char cmd_buffer[512];
-    const unsigned long memory_limit = 1024 * 1024 * 1024;
-    const int cpu_quota_us = 50000;
+    const unsigned long memory_limit = 128 * 1024 * 1024;
+    const int cpu_quota_us = 5000;
     const int cpu_period_us = 100000;
     
     container_config_t config;
@@ -1739,8 +1739,8 @@ void create_test_container_max_stress() {
     time_t base_time = time(nullptr);
     const int runtime_seconds = 600;
     char cmd_buffer[512];
-    const unsigned long memory_limit = 1024 * 1024 * 1024;
-    const int cpu_quota_us = 50000;
+    const unsigned long memory_limit = 128 * 1024 * 1024;
+    const int cpu_quota_us = 5000;
     const int cpu_period_us = 100000;
     
     container_config_t config;
