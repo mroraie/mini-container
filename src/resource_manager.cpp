@@ -328,15 +328,21 @@ int resource_manager_create_cgroup(resource_manager_t *rm,
         }
     }
 
-    if (limits->enabled && (limits->cpu.shares > 0 || limits->cpu.quota_us > 0)) {
+    // Always set CPU limits if shares or quota is specified
+    // This ensures cgroups are properly configured regardless of enabled flag
+    if (limits->cpu.shares > 0 || limits->cpu.quota_us > 0) {
         if (set_cpu_limits(rm, container_id, &limits->cpu) != 0) {
-            return -1;
+            fprintf(stderr, "Warning: failed to set CPU limits for container %s\n", container_id);
+            // Don't fail completely, but log the warning
         }
     }
 
-    if (limits->enabled && limits->memory.limit_bytes > 0) {
+    // Always set memory limits if limit_bytes is specified
+    // This ensures cgroups are properly configured regardless of enabled flag
+    if (limits->memory.limit_bytes > 0) {
         if (set_memory_limits(rm, container_id, &limits->memory) != 0) {
-            return -1;
+            fprintf(stderr, "Warning: failed to set memory limits for container %s\n", container_id);
+            // Don't fail completely, but log the warning
         }
     }
 
@@ -427,13 +433,16 @@ int resource_manager_add_process(resource_manager_t *rm,
 
         if (!added) {
             DEBUG_LOG(rm, "Warning: failed to add process %d to any CPU cgroup\n", pid);
+            // Return error if we couldn't add to any CPU cgroup
+            return -1;
         }
 
         snprintf(path, sizeof(path), "%s/%s_%s/tasks", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
         DEBUG_LOG(rm, "Debug: Adding process %d threads to memory cgroup: %s\n", pid, path);
         if (add_all_threads_to_cgroup(rm, container_id, pid, path) != 0) {
             DEBUG_LOG(rm, "Warning: failed to add process %d threads to memory cgroup: %s (errno=%d: %s)\n", pid, path, errno, strerror(errno));
-            // Don't fail completely if memory cgroup fails
+            // Return error if memory cgroup fails - it's critical for resource limits
+            return -1;
         } else {
             DEBUG_LOG(rm, "Debug: Successfully added process %d threads to memory cgroup\n", pid);
         }

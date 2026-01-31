@@ -1638,9 +1638,30 @@ void interactive_menu() {
                         }
                         break;
                     }
-                    case 0:
+                    case 0: {
+                        // Stop all running containers before exit
+                        int count;
+                        container_info_t **containers = container_manager_list(&cm, &count);
+                        int stopped_count = 0;
+                        for (int i = 0; i < count; i++) {
+                            if (containers[i]->state == CONTAINER_RUNNING) {
+                                if (container_manager_stop(&cm, containers[i]->id) == 0) {
+                                    stopped_count++;
+                                }
+                            }
+                        }
+                        if (stopped_count > 0) {
+                            clear_screen();
+                            set_color(COLOR_GREEN);
+                            printf("Stopped %d container(s) before exit\n", stopped_count);
+                            reset_color();
+                            printf("\nPress Enter to continue...");
+                            fflush(stdout);
+                            getchar();
+                        }
                         running = false;
                         break;
+                    }
                     default:
                         break;
                 }
