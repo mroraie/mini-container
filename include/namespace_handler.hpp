@@ -7,15 +7,13 @@
 
 typedef enum {
     NS_PID = CLONE_NEWPID,
-    NS_MNT = CLONE_NEWNS,
-    NS_UTS = CLONE_NEWUTS
+    NS_MNT = CLONE_NEWNS
 } namespace_type_t;
 
-#define CONTAINER_NAMESPACES (NS_PID | NS_MNT | NS_UTS)
+#define CONTAINER_NAMESPACES (NS_PID | NS_MNT)
 
 typedef struct {
     int flags;
-    char *hostname;
 } namespace_config_t;
 
 #ifdef __cplusplus
@@ -23,8 +21,6 @@ extern "C" {
 #endif
 
 void namespace_config_init(namespace_config_t *config);
-
-int namespace_set_hostname(const char *hostname);
 
 pid_t namespace_clone_process(int flags, void *child_stack, int stack_size,
                              int (*child_func)(void *), void *arg);

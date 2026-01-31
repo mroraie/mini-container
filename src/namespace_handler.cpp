@@ -28,21 +28,6 @@ void namespace_config_init(namespace_config_t *config) {
     if (!config) return;
 
     config->flags = CONTAINER_NAMESPACES;
-    config->hostname = nullptr;
-}
-
-int namespace_set_hostname(const char *hostname) {
-    if (!hostname) {
-        fprintf(stderr, "Error: hostname cannot be NULL\n");
-        return -1;
-    }
-
-    if (sethostname(hostname, strlen(hostname)) == -1) {
-        perror("sethostname failed");
-        return -1;
-    }
-
-    return 0;
 }
 
 static int setup_container_filesystem(const namespace_config_t *config) {
@@ -124,12 +109,6 @@ pid_t namespace_clone_process(int flags, void *child_stack, int stack_size,
 }
 
 int namespace_setup_isolation(const namespace_config_t *config) {
-    if (config->hostname) {
-        if (namespace_set_hostname(config->hostname) != 0) {
-            return -1;
-        }
-    }
-
     if (setup_container_filesystem(config) != 0) {
         return -1;
     }
@@ -188,8 +167,7 @@ int namespace_join(pid_t target_pid, int ns_type) {
 
     snprintf(ns_path, sizeof(ns_path), "/proc/%d/ns/%s", target_pid,
              ns_type == CLONE_NEWPID ? "pid" :
-             ns_type == CLONE_NEWNS ? "mnt" :
-             ns_type == CLONE_NEWUTS ? "uts" : "unknown");
+             ns_type == CLONE_NEWNS ? "mnt" : "unknown");
 
     fd = open(ns_path, O_RDONLY);
     if (fd == -1) {

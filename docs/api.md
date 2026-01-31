@@ -42,10 +42,9 @@ container_info_t *container_manager_get_info(container_manager_t *cm, const char
 
 ```c++
 void namespace_config_init(namespace_config_t *config);
-int namespace_set_hostname(const char *hostname);
 ```
 
-تنظیمات فضای نام را پیکربندی کرده و نام میزبان کانتینر را تنظیم کنید.
+تنظیمات فضای نام را پیکربندی کنید.
 
 ### ایجاد فرایند
 
@@ -189,7 +188,6 @@ typedef struct {
 enum {
     NS_PID = CLONE_NEWPID,
     NS_MNT = CLONE_NEWNS,
-    NS_UTS = CLONE_NEWUTS,
     NS_NET = CLONE_NEWNET,
     NS_USER = CLONE_NEWUSER
 };

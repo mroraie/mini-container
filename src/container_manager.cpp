@@ -20,16 +20,38 @@ using namespace std;
 #define STATE_FILE_PATH "/var/run/mini-container/state.json"
 #define STATE_FILE_PATH_FALLBACK "/tmp/mini-container-state.json"
 
-static char *generate_container_id() {
-    static int counter = 0;
-    char *id = static_cast<char*>(malloc(MAX_CONTAINER_ID));
+static int extract_numeric_id(const char *id) {
+    // Try to extract numeric ID from string
+    // If ID is just a number, return it
+    // Otherwise return -1
+    if (!id) return -1;
+    
+    char *endptr;
+    long num = strtol(id, &endptr, 10);
+    if (*endptr == '\0' && num > 0) {
+        return (int)num;
+    }
+    return -1;
+}
 
+static char *generate_container_id(container_manager_t *cm) {
+    char *id = static_cast<char*>(malloc(MAX_CONTAINER_ID));
     if (!id) {
         return nullptr;
     }
 
-    time_t now = time(nullptr);
-    snprintf(id, MAX_CONTAINER_ID, "container_%ld_%d", now, counter++);
+    // Find the maximum numeric ID in existing containers
+    int max_id = 0;
+    for (int i = 0; i < cm->container_count; i++) {
+        int num_id = extract_numeric_id(cm->containers[i]->id);
+        if (num_id > max_id) {
+            max_id = num_id;
+        }
+    }
+
+    // Generate next ID (starting from 1)
+    int next_id = max_id + 1;
+    snprintf(id, MAX_CONTAINER_ID, "%d", next_id);
     return id;
 }
 
@@ -278,7 +300,7 @@ int container_manager_create(container_manager_t *cm,
         return -1;
     }
 
-    char *container_id = config->id ? strdup(config->id) : generate_container_id();
+    char *container_id = config->id ? strdup(config->id) : generate_container_id(cm);
     if (!container_id) {
         perror("failed to generate container ID");
         return -1;
@@ -528,7 +550,7 @@ int container_manager_run(container_manager_t *cm, container_config_t *config) {
     }
 
     if (!config->id) {
-        config->id = generate_container_id();
+        config->id = generate_container_id(cm);
         if (!config->id) {
             return -1;
         }

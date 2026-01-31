@@ -83,7 +83,6 @@ static void print_usage(const char *program_name)
     printf("  -m, --memory <MB>          Memory limit in MB (default: 128)\n");
     printf("  -c, --cpu <shares>         CPU shares (default: 1024)\n");
     printf("  -r, --root <path>          Container root filesystem path\n");
-    printf("  -n, --hostname <name>      Container hostname\n");
     printf("  -d, --detach               Run container in background (don't wait)\n");
     printf("\nExamples:\n");
     printf("  %s run /bin/sh\n", program_name);
@@ -100,7 +99,6 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
         {"memory", required_argument, 0, 'm'},
         {"cpu", required_argument, 0, 'c'},
         {"root", required_argument, 0, 'r'},
-        {"hostname", required_argument, 0, 'n'},
         {"detach", no_argument, 0, 'd'},
         {0, 0, 0, 0}};
 
@@ -113,7 +111,7 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
     resource_limits_init(&config->res_limits);
     fs_config_init(&config->fs_config);
 
-    while ((c = getopt_long(argc, argv, "hm:c:r:n:d", long_options, &option_index)) != -1)
+    while ((c = getopt_long(argc, argv, "hm:c:r:d", long_options, &option_index)) != -1)
     {
         switch (c)
         {
@@ -131,10 +129,6 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
 
         case 'r':
             config->fs_config.root_path = strdup(optarg);
-            break;
-
-        case 'n':
-            config->ns_config.hostname = strdup(optarg);
             break;
 
         case 'd':
@@ -203,7 +197,6 @@ static int handle_run(int argc, char *argv[])
     }
 
     free(config.id);
-    free(config.ns_config.hostname);
     free(config.fs_config.root_path);
 
     return EXIT_SUCCESS;
@@ -663,7 +656,6 @@ void interactive_create_container() {
     
     char command[1024];
     char container_name[256] = "";
-    char hostname[256] = "mini-container";
     char root_path[512] = "/";  // Use real root for demo (allows /bin/sh to work)
     int memory = 128;
     int cpu = 1024;
@@ -678,7 +670,53 @@ void interactive_create_container() {
         }
     }
     
-    printf("Command to run: ");
+    // Display suggested commands
+    set_color(COLOR_CYAN);
+    printf("\n╔══════════════════════════════════════════════════════════════════════════════╗\n");
+    printf("║                    Suggested Commands for Testing                               ║\n");
+    printf("╚══════════════════════════════════════════════════════════════════════════════╝\n");
+    reset_color();
+    
+    set_color(COLOR_YELLOW);
+    printf("\n* CPU Stress Test:\n");
+    reset_color();
+    printf("  Basic CPU stress (uses full CPU capacity):\n");
+    set_color(COLOR_GREEN);
+    printf("  sh -c 'while true; do :; done'\n");
+    reset_color();
+    printf("  Advanced CPU stress test:\n");
+    set_color(COLOR_GREEN);
+    printf("  sh -c 'while true; do echo $((12345*67890)) > /dev/null; done'\n");
+    reset_color();
+    
+    set_color(COLOR_YELLOW);
+    printf("\n* Memory Limit Test:\n");
+    reset_color();
+    printf("  Simple memory test:\n");
+    set_color(COLOR_GREEN);
+    printf("  sh -c 'dd if=/dev/zero of=/tmp/mem bs=1M count=80'\n");
+    reset_color();
+    printf("  Allocate 256 MB of memory gradually:\n");
+    set_color(COLOR_GREEN);
+    printf("  sh -c 'x=\"\"; for i in $(seq 1 256); do x=\"$x$(head -c 1M /dev/zero)\"; sleep 0.12; done; sleep infinity'\n");
+    reset_color();
+    printf("  Memory stress test (allocate 2GB, will be limited by memory limit):\n");
+    set_color(COLOR_GREEN);
+    printf("  sh -c 'x=\"\"; for i in $(seq 1 2048); do x=\"$x$(head -c 1M /dev/zero)\"; sleep 0.0147; done; sleep infinity'\n");
+    reset_color();
+    
+    set_color(COLOR_YELLOW);
+    printf("\n* Combined CPU and RAM Stress Test:\n");
+    reset_color();
+    set_color(COLOR_GREEN);
+    printf("  sh -c 'a=\"\"; while true; do a=\"$a$(printf %%0100000d 0)\"; done'\n");
+    reset_color();
+    
+    set_color(COLOR_CYAN);
+    printf("\n───────────────────────────────────────────────────────────────────────────────\n");
+    reset_color();
+    
+    printf("\nCommand to run: ");
     fflush(stdout);
     if (!fgets(command, sizeof(command), stdin)) {
         printf("Error reading command\n");
@@ -703,19 +741,6 @@ void interactive_create_container() {
     if (fgets(cpu_str, sizeof(cpu_str), stdin)) {
         int c = atoi(cpu_str);
         if (c > 0) cpu = c;
-    }
-    
-    printf("Hostname (default mini-container): ");
-    fflush(stdout);
-    char hostname_input[256];
-    if (fgets(hostname_input, sizeof(hostname_input), stdin)) {
-        size_t hlen = strlen(hostname_input);
-        if (hlen > 0 && hostname_input[hlen-1] == '\n') {
-            hostname_input[hlen-1] = '\0';
-        }
-        if (strlen(hostname_input) > 0) {
-            strncpy(hostname, hostname_input, sizeof(hostname)-1);
-        }
     }
     
     printf("Root path (default / - uses real root for demo): ");
@@ -777,7 +802,6 @@ void interactive_create_container() {
     
     config.res_limits.memory.limit_bytes = memory * 1024 * 1024;
     config.res_limits.cpu.shares = cpu;
-    config.ns_config.hostname = strdup(hostname);
     config.fs_config.root_path = strdup(root_path);
     config.command = args.data();
     config.command_argc = args.size() - 1;
@@ -804,7 +828,6 @@ void interactive_create_container() {
     for (auto arg : args) {
         if (arg) free(arg);
     }
-    free(config.ns_config.hostname);
     free(config.fs_config.root_path);
     
     printf("\nPress Enter to continue...");
@@ -850,7 +873,6 @@ void run_tests() {
         printf("\n[Test 1] CPU Usage Test...\n");
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
-        config.ns_config.hostname = strdup("cpu-test");
         config.fs_config.root_path = strdup("/");  // Use real root for demo
         
         args.clear();
@@ -878,7 +900,6 @@ void run_tests() {
         }
         
         for (auto arg : args) if (arg) free(arg);
-        free(config.ns_config.hostname);
         free(config.fs_config.root_path);
     }
     
@@ -888,7 +909,6 @@ void run_tests() {
         config.id = container_id;
         config.res_limits.memory.limit_bytes = 64 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
-        config.ns_config.hostname = strdup("mem-test");
         config.fs_config.root_path = strdup("/");  // Use real root for demo
         
         args.clear();
@@ -915,7 +935,6 @@ void run_tests() {
         }
         
         for (auto arg : args) if (arg) free(arg);
-        free(config.ns_config.hostname);
         free(config.fs_config.root_path);
     }
     
@@ -925,7 +944,6 @@ void run_tests() {
         config.id = container_id;
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 512;
-        config.ns_config.hostname = strdup("cpu-limit-test");
         config.fs_config.root_path = strdup("/");  // Use real root for demo
         
         args.clear();
@@ -952,7 +970,6 @@ void run_tests() {
         }
         
         for (auto arg : args) if (arg) free(arg);
-        free(config.ns_config.hostname);
         free(config.fs_config.root_path);
     }
     
@@ -962,7 +979,6 @@ void run_tests() {
         config.id = container_id;
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
-        config.ns_config.hostname = strdup("combined-test");
         config.fs_config.root_path = strdup("/");  // Use real root for demo
         
         args.clear();
@@ -990,7 +1006,6 @@ void run_tests() {
         }
         
         for (auto arg : args) if (arg) free(arg);
-        free(config.ns_config.hostname);
         free(config.fs_config.root_path);
     }
     
@@ -1020,7 +1035,6 @@ void init_containers() {
         config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
-        config.ns_config.hostname = strdup("cpu-intensive");
         config.fs_config.root_path = strdup("/");
         
         vector<char*> args;
@@ -1036,7 +1050,6 @@ void init_containers() {
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
-        free(config.ns_config.hostname);
         free(config.fs_config.root_path);
     }
     
@@ -1053,7 +1066,6 @@ void init_containers() {
         config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
-        config.ns_config.hostname = strdup("ram-intensive");
         config.fs_config.root_path = strdup("/");
         
         vector<char*> args;
@@ -1069,7 +1081,6 @@ void init_containers() {
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
-        free(config.ns_config.hostname);
         free(config.fs_config.root_path);
     }
     
@@ -1086,7 +1097,6 @@ void init_containers() {
         config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
-        config.ns_config.hostname = strdup("cpu-ram-heavy");
         config.fs_config.root_path = strdup("/");
         
         vector<char*> args;
@@ -1102,7 +1112,6 @@ void init_containers() {
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
-        free(config.ns_config.hostname);
         free(config.fs_config.root_path);
     }
     
@@ -1119,7 +1128,6 @@ void init_containers() {
         config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
-        config.ns_config.hostname = strdup("cpu-calc");
         config.fs_config.root_path = strdup("/");
         
         vector<char*> args;
@@ -1135,7 +1143,6 @@ void init_containers() {
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
-        free(config.ns_config.hostname);
         free(config.fs_config.root_path);
     }
     
@@ -1152,7 +1159,6 @@ void init_containers() {
         config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
-        config.ns_config.hostname = strdup("mem-stress");
         config.fs_config.root_path = strdup("/");
         
         vector<char*> args;
@@ -1168,7 +1174,6 @@ void init_containers() {
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
-        free(config.ns_config.hostname);
         free(config.fs_config.root_path);
     }
     
@@ -1185,7 +1190,6 @@ void init_containers() {
         config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
-        config.ns_config.hostname = strdup("mixed-workload");
         config.fs_config.root_path = strdup("/");
         
         vector<char*> args;
@@ -1201,7 +1205,6 @@ void init_containers() {
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
-        free(config.ns_config.hostname);
         free(config.fs_config.root_path);
     }
     
@@ -1218,7 +1221,6 @@ void init_containers() {
         config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
-        config.ns_config.hostname = strdup("high-cpu");
         config.fs_config.root_path = strdup("/");
         
         vector<char*> args;
@@ -1234,7 +1236,6 @@ void init_containers() {
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
-        free(config.ns_config.hostname);
         free(config.fs_config.root_path);
     }
     
@@ -1251,7 +1252,6 @@ void init_containers() {
         config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
-        config.ns_config.hostname = strdup("high-mem");
         config.fs_config.root_path = strdup("/");
         
         vector<char*> args;
@@ -1267,7 +1267,6 @@ void init_containers() {
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
-        free(config.ns_config.hostname);
         free(config.fs_config.root_path);
     }
     
@@ -1284,7 +1283,6 @@ void init_containers() {
         config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
-        config.ns_config.hostname = strdup("balanced");
         config.fs_config.root_path = strdup("/");
         
         vector<char*> args;
@@ -1300,7 +1298,6 @@ void init_containers() {
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
-        free(config.ns_config.hostname);
         free(config.fs_config.root_path);
     }
     
@@ -1317,7 +1314,6 @@ void init_containers() {
         config.res_limits.cpu.quota_us = cpu_quota_us;
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
-        config.ns_config.hostname = strdup("max-stress");
         config.fs_config.root_path = strdup("/");
         
         vector<char*> args;
@@ -1333,7 +1329,6 @@ void init_containers() {
         
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
-        free(config.ns_config.hostname);
         free(config.fs_config.root_path);
     }
     
@@ -1501,11 +1496,18 @@ void interactive_menu() {
                             if (len > 0 && id[len-1] == '\n') {
                                 id[len-1] = '\0';
                             }
-                            char cmd_destroy[] = "destroy";
-                            char* argv[] = {cmd_destroy, id, nullptr};
-                            handle_destroy(2, argv);
+                            if (strlen(id) > 0) {
+                                char cmd_destroy[] = "destroy";
+                                char* argv[] = {cmd_destroy, id, nullptr};
+                                handle_destroy(2, argv);
+                            } else {
+                                printf("Error: Container ID cannot be empty\n");
+                            }
                             printf("\nPress Enter to continue...");
-                            getchar();
+                            fflush(stdout);
+                            // Clear any remaining input
+                            int c;
+                            while ((c = getchar()) != '\n' && c != EOF);
                         }
                         break;
                     }
