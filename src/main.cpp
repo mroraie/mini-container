@@ -229,7 +229,15 @@ static int handle_list(int argc, char *argv[])
     int count;
     container_info_t **containers = container_manager_list(&cm, &count);
 
-    if (count == 0)
+    // Filter out destroyed containers
+    vector<container_info_t*> active_containers;
+    for (int i = 0; i < count; i++) {
+        if (containers[i]->state != CONTAINER_DESTROYED) {
+            active_containers.push_back(containers[i]);
+        }
+    }
+
+    if (active_containers.size() == 0)
     {
         printf("No containers\n");
         printf("\nTo create a container, use:\n");
@@ -243,9 +251,9 @@ static int handle_list(int argc, char *argv[])
     printf("%-20s %-10s %-10s %-15s %-15s\n",
            "------------", "-----", "---", "-------", "-------");
 
-    for (int i = 0; i < count; i++)
+    for (size_t i = 0; i < active_containers.size(); i++)
     {
-        container_info_t *info = containers[i];
+        container_info_t *info = active_containers[i];
         char created_str[20] = "";
         char started_str[20] = "";
 
@@ -405,18 +413,26 @@ void display_compact_monitor() {
     int count;
     container_info_t **containers = container_manager_list(&cm, &count);
     
+    // Filter out destroyed containers
+    vector<container_info_t*> active_containers;
+    for (int i = 0; i < count; i++) {
+        if (containers[i]->state != CONTAINER_DESTROYED) {
+            active_containers.push_back(containers[i]);
+        }
+    }
+    
     int running_count = 0;
     double total_cpu_percent = 0.0;
     unsigned long total_memory_bytes = 0;
     
-    for (int i = 0; i < count; i++) {
-        if (containers[i]->state == CONTAINER_RUNNING) {
+    for (size_t i = 0; i < active_containers.size(); i++) {
+        if (active_containers[i]->state == CONTAINER_RUNNING) {
             running_count++;
             unsigned long cpu_usage = 0, memory_usage = 0;
-            resource_manager_get_stats(cm.rm, containers[i]->id, &cpu_usage, &memory_usage);
+            resource_manager_get_stats(cm.rm, active_containers[i]->id, &cpu_usage, &memory_usage);
             total_memory_bytes += memory_usage;
-            if (containers[i]->started_at > 0) {
-                total_cpu_percent += calculate_cpu_percent(cpu_usage, containers[i]->started_at);
+            if (active_containers[i]->started_at > 0) {
+                total_cpu_percent += calculate_cpu_percent(cpu_usage, active_containers[i]->started_at);
             }
         }
     }
@@ -429,7 +445,7 @@ void display_compact_monitor() {
     set_color(COLOR_GREEN);
     printf("Running: %d  ", running_count);
     reset_color();
-    printf("Total: %d  ", count);
+    printf("Total: %zu  ", active_containers.size());
     
     set_color(COLOR_YELLOW);
     printf("Total CPU: %.1f%%  ", total_cpu_percent);
@@ -449,14 +465,14 @@ void display_compact_monitor() {
            "CONTAINER ID", "PID", "STATE", "CPU%", "MEMORY", "RUNTIME");
     reset_color();
     
-    if (count == 0) {
+    if (active_containers.size() == 0) {
         set_color(COLOR_YELLOW);
-        printf("No containers running\n");
+        printf("No containers\n");
         reset_color();
     } else {
         vector<container_info_t*> sorted_containers;
-        for (int i = 0; i < count; i++) {
-            sorted_containers.push_back(containers[i]);
+        for (size_t i = 0; i < active_containers.size(); i++) {
+            sorted_containers.push_back(active_containers[i]);
         }
         sort(sorted_containers.begin(), sorted_containers.end(),
              [](container_info_t* a, container_info_t* b) {
@@ -524,9 +540,17 @@ void display_monitor() {
         int count;
         container_info_t **containers = container_manager_list(&cm, &count);
         
-        int running_count = 0;
+        // Filter out destroyed containers
+        vector<container_info_t*> active_containers;
         for (int i = 0; i < count; i++) {
-            if (containers[i]->state == CONTAINER_RUNNING) {
+            if (containers[i]->state != CONTAINER_DESTROYED) {
+                active_containers.push_back(containers[i]);
+            }
+        }
+        
+        int running_count = 0;
+        for (size_t i = 0; i < active_containers.size(); i++) {
+            if (active_containers[i]->state == CONTAINER_RUNNING) {
                 running_count++;
             }
         }
@@ -534,7 +558,7 @@ void display_monitor() {
         set_color(COLOR_GREEN);
         printf("Running: %d  ", running_count);
         reset_color();
-        printf("Total: %d  ", count);
+        printf("Total: %zu  ", active_containers.size());
         
         time_t now = time(nullptr);
         char time_str[64];
@@ -546,14 +570,14 @@ void display_monitor() {
                "CONTAINER ID", "PID", "STATE", "CPU%", "MEMORY", "RUNTIME", "CREATED");
         reset_color();
         
-        if (count == 0) {
+        if (active_containers.size() == 0) {
             set_color(COLOR_YELLOW);
-            printf("No containers running\n");
+            printf("No containers\n");
             reset_color();
         } else {
             vector<container_info_t*> sorted_containers;
-            for (int i = 0; i < count; i++) {
-                sorted_containers.push_back(containers[i]);
+            for (size_t i = 0; i < active_containers.size(); i++) {
+                sorted_containers.push_back(active_containers[i]);
             }
             sort(sorted_containers.begin(), sorted_containers.end(),
                  [](container_info_t* a, container_info_t* b) {
@@ -1477,10 +1501,27 @@ void interactive_menu() {
                             if (len > 0 && id[len-1] == '\n') {
                                 id[len-1] = '\0';
                             }
-                            if (strlen(id) > 0) {
-                                char cmd_destroy[] = "destroy";
-                                char* argv[] = {cmd_destroy, id, nullptr};
-                                handle_destroy(2, argv);
+                            // Trim leading and trailing whitespace
+                            char *start = id;
+                            while (*start == ' ' || *start == '\t') start++;
+                            char *end = id + strlen(id) - 1;
+                            while (end > start && (*end == ' ' || *end == '\t')) end--;
+                            *(end + 1) = '\0';
+                            
+                            if (strlen(start) > 0) {
+                                // First check if container exists
+                                container_info_t *info = container_manager_get_info(&cm, start);
+                                if (info) {
+                                    char cmd_destroy[] = "destroy";
+                                    char* argv[] = {cmd_destroy, start, nullptr};
+                                    handle_destroy(2, argv);
+                                } else {
+                                    set_color(COLOR_RED);
+                                    printf("Error: Container %s not found\n", start);
+                                    reset_color();
+                                    printf("\nAvailable containers:\n");
+                                    handle_list(0, nullptr);
+                                }
                             } else {
                                 printf("Error: Container ID cannot be empty\n");
                             }
