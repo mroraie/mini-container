@@ -190,7 +190,7 @@ std::string SimpleWebServer::getContainerListJSON() {
             if (info->state == CONTAINER_RUNNING) {
                 resource_manager_get_stats(cm_->rm, info->id, &cpu_usage, &memory_usage);
                 
-                char path[512];
+                char path[1024];
                 unsigned long cpu_quota_us = 0;
                 unsigned long cpu_period_us = 100000;
                 
@@ -219,12 +219,16 @@ std::string SimpleWebServer::getContainerListJSON() {
                         snprintf(cpu_path, sizeof(cpu_path), "%s/%s_%s", "/sys/fs/cgroup/cpu", cm_->rm->cgroup_path, info->id);
                     }
                     
-                    snprintf(path, sizeof(path), "%s/cpu.cfs_quota_us", cpu_path);
-                    cpu_quota_us = read_cgroup_limit(path);
-                    snprintf(path, sizeof(path), "%s/cpu.cfs_period_us", cpu_path);
-                    unsigned long period = read_cgroup_limit(path);
-                    if (period > 0) {
-                        cpu_period_us = period;
+                    int ret = snprintf(path, sizeof(path), "%s/cpu.cfs_quota_us", cpu_path);
+                    if (ret > 0 && (size_t)ret < sizeof(path)) {
+                        cpu_quota_us = read_cgroup_limit(path);
+                    }
+                    ret = snprintf(path, sizeof(path), "%s/cpu.cfs_period_us", cpu_path);
+                    if (ret > 0 && (size_t)ret < sizeof(path)) {
+                        unsigned long period = read_cgroup_limit(path);
+                        if (period > 0) {
+                            cpu_period_us = period;
+                        }
                     }
                     
                     snprintf(path, sizeof(path), "%s/%s_%s/memory.limit_in_bytes", "/sys/fs/cgroup/memory", cm_->rm->cgroup_path, info->id);
