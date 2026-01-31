@@ -513,9 +513,30 @@ container_info_t **container_manager_list(container_manager_t *cm, int *count) {
     return cm->containers;
 }
 
+static container_info_t *find_container_by_pid(container_manager_t *cm, pid_t pid) {
+    for (int i = 0; i < cm->container_count; i++) {
+        if (cm->containers[i]->pid == pid) {
+            return cm->containers[i];
+        }
+    }
+    return nullptr;
+}
+
 container_info_t *container_manager_get_info(container_manager_t *cm,
                                            const char *container_id) {
-    return find_container(cm, container_id);
+    container_info_t *info = find_container(cm, container_id);
+    if (info) {
+        return info;
+    }
+    
+    // If not found by ID, try to find by PID if input is numeric
+    char *endptr;
+    long pid_num = strtol(container_id, &endptr, 10);
+    if (*endptr == '\0' && pid_num > 0) {
+        return find_container_by_pid(cm, (pid_t)pid_num);
+    }
+    
+    return nullptr;
 }
 
 void container_manager_cleanup(container_manager_t *cm) {

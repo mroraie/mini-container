@@ -1561,13 +1561,20 @@ void interactive_menu() {
                             if (len > 0 && id[len-1] == '\n') {
                                 id[len-1] = '\0';
                             }
-                            if (strlen(id) > 0) {
-                                container_info_t *info = container_manager_get_info(&cm, id);
+                            // Trim leading and trailing whitespace
+                            char *start = id;
+                            while (*start == ' ' || *start == '\t') start++;
+                            char *end = id + strlen(id) - 1;
+                            while (end > start && (*end == ' ' || *end == '\t')) end--;
+                            *(end + 1) = '\0';
+                            
+                            if (strlen(start) > 0) {
+                                container_info_t *info = container_manager_get_info(&cm, start);
                                 if (info) {
                                     clear_screen();
                                     set_color(COLOR_BOLD);
                                     set_color(COLOR_CYAN);
-                                    printf("Edit Container: %s\n", id);
+                                    printf("Edit Container: %s\n", start);
                                     reset_color();
                                     printf("\n");
                                     printf("Container ID: %s\n", info->id);
@@ -1583,7 +1590,7 @@ void interactive_menu() {
                                     
                                     if (info->state == CONTAINER_RUNNING) {
                                         unsigned long cpu_usage = 0, memory_usage = 0;
-                                        resource_manager_get_stats(cm.rm, id, &cpu_usage, &memory_usage);
+                                        resource_manager_get_stats(cm.rm, start, &cpu_usage, &memory_usage);
                                         printf("CPU Usage: %lu nanoseconds\n", cpu_usage);
                                         printf("Memory Usage: %lu bytes\n", memory_usage);
                                     }
@@ -1605,16 +1612,16 @@ void interactive_menu() {
                                         if (opt == 1) {
                                             if (info->state == CONTAINER_RUNNING) {
                                                 char cmd_stop[] = "stop";
-                                                char* argv[] = {cmd_stop, id, nullptr};
+                                                char* argv[] = {cmd_stop, start, nullptr};
                                                 handle_stop(2, argv);
                                             } else if (info->state == CONTAINER_STOPPED) {
-                                                if (container_manager_start(&cm, id) == 0) {
+                                                if (container_manager_start(&cm, start) == 0) {
                                                     set_color(COLOR_GREEN);
-                                                    printf("Container %s started\n", id);
+                                                    printf("Container %s started\n", start);
                                                     reset_color();
                                                 } else {
                                                     set_color(COLOR_RED);
-                                                    printf("Failed to start container %s\n", id);
+                                                    printf("Failed to start container %s\n", start);
                                                     reset_color();
                                                 }
                                             }
@@ -1622,8 +1629,10 @@ void interactive_menu() {
                                     }
                                 } else {
                                     set_color(COLOR_RED);
-                                    printf("Container %s not found\n", id);
+                                    printf("Container %s not found\n", start);
                                     reset_color();
+                                    printf("\nAvailable containers:\n");
+                                    handle_list(0, nullptr);
                                 }
                             } else {
                                 printf("Error: Container ID cannot be empty\n");
