@@ -10,6 +10,8 @@
 #include <ctime>
 #include <vector>
 #include <cstdlib>
+#include <map>
+#include <string>
 
 SimpleWebServer::SimpleWebServer(container_manager_t* cm, int port)
     : cm_(cm), port_(port), running_(false), server_socket_(-1) {
@@ -166,6 +168,9 @@ static unsigned long read_cgroup_limit(const char* path) {
 }
 
 std::string SimpleWebServer::getContainerListJSON() {
+        static std::map<std::string, unsigned long> prev_cpu_usage;
+        static std::map<std::string, time_t> prev_time;
+        
         std::string json = "{\"containers\":[";
 
         int count;
@@ -177,6 +182,8 @@ std::string SimpleWebServer::getContainerListJSON() {
                 active_containers.push_back(containers[i]);
             }
         }
+
+        time_t current_time = time(nullptr);
 
         for (size_t i = 0; i < active_containers.size(); i++) {
             container_info_t* info = active_containers[i];
@@ -235,16 +242,42 @@ std::string SimpleWebServer::getContainerListJSON() {
                     memory_limit = read_cgroup_limit(path);
                 }
                 
-                if (cpu_quota_us > 0 && cpu_period_us > 0) {
-                    cpu_limit = cpu_quota_us;
-                    cpu_percent = 100.0 * ((double)cpu_quota_us / (double)cpu_period_us);
-                } else {
-                    cpu_percent = 0.0;
+                std::string container_id_str = std::string(info->id);
+                
+                if (prev_cpu_usage.find(container_id_str) != prev_cpu_usage.end() && 
+                    prev_time.find(container_id_str) != prev_time.end()) {
+                    unsigned long cpu_diff = cpu_usage - prev_cpu_usage[container_id_str];
+                    time_t time_diff = current_time - prev_time[container_id_str];
+                    if (time_diff > 0 && cpu_diff > 0) {
+                        double cpu_diff_sec = (double)cpu_diff / 1000000000.0;
+                        double time_diff_sec = (double)time_diff;
+                        if (time_diff_sec > 0) {
+                            double cpu_usage_ratio = cpu_diff_sec / time_diff_sec;
+                            if (cpu_quota_us > 0 && cpu_period_us > 0) {
+                                cpu_limit = cpu_quota_us;
+                                double max_cpu = (double)cpu_quota_us / (double)cpu_period_us;
+                                cpu_percent = 100.0 * (cpu_usage_ratio / max_cpu);
+                            } else {
+                                cpu_percent = 100.0 * cpu_usage_ratio;
+                            }
+                            if (cpu_percent > 100.0) cpu_percent = 100.0;
+                            if (cpu_percent < 0.0) cpu_percent = 0.0;
+                        }
+                    }
                 }
+                prev_cpu_usage[container_id_str] = cpu_usage;
+                prev_time[container_id_str] = current_time;
                 
                 if (memory_limit > 0) {
                     memory_percent = 100.0 * ((double)memory_usage / (double)memory_limit);
+                    if (memory_percent > 100.0) memory_percent = 100.0;
+                } else {
+                    memory_percent = 0.0;
                 }
+            } else {
+                std::string container_id_str = std::string(info->id);
+                prev_cpu_usage.erase(container_id_str);
+                prev_time.erase(container_id_str);
             }
 
             const char* state_names[] = {"CREATED", "RUNNING", "STOPPED", "DESTROYED"};
@@ -448,81 +481,103 @@ std::string SimpleWebServer::generateHTML() {
                 .then(r => r.json())
                 .then(data => {
                     const containersList = document.getElementById('containers-list');
-                    containersList.innerHTML = '';
+                    const existingContainers = new Set();
                     
                     if (!data.containers || data.containers.length === 0) {
                         containersList.innerHTML = '<p style="text-align: center; color: #666;">No active containers</p>';
+                        charts = {};
                         return;
                     }
                     
                     data.containers.forEach(container => {
-                        const containerDiv = document.createElement('div');
-                        containerDiv.className = 'container-section';
-                        containerDiv.id = 'container-' + container.id;
+                        existingContainers.add(container.id);
+                        const containerId = 'container-' + container.id;
+                        let containerDiv = document.getElementById(containerId);
                         
-                        const containerTitle = document.createElement('div');
-                        containerTitle.className = 'container-title';
-                        containerTitle.textContent = 'Container: ' + container.id;
-                        containerDiv.appendChild(containerTitle);
-                        
-                        const chartsDiv = document.createElement('div');
-                        chartsDiv.className = 'charts';
-                        
-                        const cpuWrapper = document.createElement('div');
-                        cpuWrapper.className = 'chart-wrapper';
-                        const cpuTitle = document.createElement('div');
-                        cpuTitle.className = 'chart-title';
-                        cpuTitle.textContent = 'CPU Usage';
-                        cpuWrapper.appendChild(cpuTitle);
-                        const cpuCanvas = document.createElement('canvas');
-                        cpuCanvas.id = 'cpu-' + container.id;
-                        const cpuContainer = document.createElement('div');
-                        cpuContainer.className = 'chart-container';
-                        cpuContainer.appendChild(cpuCanvas);
-                        cpuWrapper.appendChild(cpuContainer);
-                        chartsDiv.appendChild(cpuWrapper);
-                        
-                        const ramWrapper = document.createElement('div');
-                        ramWrapper.className = 'chart-wrapper';
-                        const ramTitle = document.createElement('div');
-                        ramTitle.className = 'chart-title';
-                        ramTitle.textContent = 'RAM Usage';
-                        ramWrapper.appendChild(ramTitle);
-                        const ramCanvas = document.createElement('canvas');
-                        ramCanvas.id = 'ram-' + container.id;
-                        const ramContainer = document.createElement('div');
-                        ramContainer.className = 'chart-container';
-                        ramContainer.appendChild(ramCanvas);
-                        ramWrapper.appendChild(ramContainer);
-                        chartsDiv.appendChild(ramWrapper);
-                        
-                        containerDiv.appendChild(chartsDiv);
-                        containersList.appendChild(containerDiv);
-                        
-                        if (!charts['cpu-' + container.id]) {
+                        if (!containerDiv) {
+                            containerDiv = document.createElement('div');
+                            containerDiv.className = 'container-section';
+                            containerDiv.id = containerId;
+                            
+                            const containerTitle = document.createElement('div');
+                            containerTitle.className = 'container-title';
+                            containerTitle.textContent = 'Container: ' + container.id;
+                            containerDiv.appendChild(containerTitle);
+                            
+                            const chartsDiv = document.createElement('div');
+                            chartsDiv.className = 'charts';
+                            
+                            const cpuWrapper = document.createElement('div');
+                            cpuWrapper.className = 'chart-wrapper';
+                            const cpuTitle = document.createElement('div');
+                            cpuTitle.className = 'chart-title';
+                            cpuTitle.textContent = 'CPU Usage';
+                            cpuWrapper.appendChild(cpuTitle);
+                            const cpuCanvas = document.createElement('canvas');
+                            cpuCanvas.id = 'cpu-' + container.id;
+                            const cpuContainer = document.createElement('div');
+                            cpuContainer.className = 'chart-container';
+                            cpuContainer.appendChild(cpuCanvas);
+                            cpuWrapper.appendChild(cpuContainer);
+                            chartsDiv.appendChild(cpuWrapper);
+                            
+                            const ramWrapper = document.createElement('div');
+                            ramWrapper.className = 'chart-wrapper';
+                            const ramTitle = document.createElement('div');
+                            ramTitle.className = 'chart-title';
+                            ramTitle.textContent = 'RAM Usage';
+                            ramWrapper.appendChild(ramTitle);
+                            const ramCanvas = document.createElement('canvas');
+                            ramCanvas.id = 'ram-' + container.id;
+                            const ramContainer = document.createElement('div');
+                            ramContainer.className = 'chart-container';
+                            ramContainer.appendChild(ramCanvas);
+                            ramWrapper.appendChild(ramContainer);
+                            chartsDiv.appendChild(ramWrapper);
+                            
+                            containerDiv.appendChild(chartsDiv);
+                            containersList.appendChild(containerDiv);
+                            
                             charts['cpu-' + container.id] = createChart(container.id, 'cpu', 'cpu-' + container.id);
-                        }
-                        if (!charts['ram-' + container.id]) {
                             charts['ram-' + container.id] = createChart(container.id, 'ram', 'ram-' + container.id);
                         }
                         
                         if (container.state === 'RUNNING') {
-                            if (container.cpu_percent !== undefined) {
+                            if (container.cpu_percent !== undefined && !isNaN(container.cpu_percent)) {
                                 const cpuPercent = Math.min(100, Math.max(0, parseFloat(container.cpu_percent)));
-                                charts['cpu-' + container.id].data.datasets[0].data = [cpuPercent, 100 - cpuPercent];
-                                charts['cpu-' + container.id].update('none');
+                                if (charts['cpu-' + container.id]) {
+                                    charts['cpu-' + container.id].data.datasets[0].data = [cpuPercent, 100 - cpuPercent];
+                                    charts['cpu-' + container.id].update('none');
+                                }
                             }
                             
-                            if (container.memory_percent !== undefined) {
+                            if (container.memory_percent !== undefined && !isNaN(container.memory_percent)) {
                                 const memPercent = Math.min(100, Math.max(0, parseFloat(container.memory_percent)));
-                                charts['ram-' + container.id].data.datasets[0].data = [memPercent, 100 - memPercent];
-                                charts['ram-' + container.id].update('none');
+                                if (charts['ram-' + container.id]) {
+                                    charts['ram-' + container.id].data.datasets[0].data = [memPercent, 100 - memPercent];
+                                    charts['ram-' + container.id].update('none');
+                                }
                             }
                         } else {
-                            charts['cpu-' + container.id].data.datasets[0].data = [0, 100];
-                            charts['cpu-' + container.id].update('none');
-                            charts['ram-' + container.id].data.datasets[0].data = [0, 100];
-                            charts['ram-' + container.id].update('none');
+                            if (charts['cpu-' + container.id]) {
+                                charts['cpu-' + container.id].data.datasets[0].data = [0, 100];
+                                charts['cpu-' + container.id].update('none');
+                            }
+                            if (charts['ram-' + container.id]) {
+                                charts['ram-' + container.id].data.datasets[0].data = [0, 100];
+                                charts['ram-' + container.id].update('none');
+                            }
+                        }
+                    });
+                    
+                    Object.keys(charts).forEach(chartKey => {
+                        const containerId = chartKey.replace('cpu-', '').replace('ram-', '');
+                        if (!existingContainers.has(containerId)) {
+                            const containerDiv = document.getElementById('container-' + containerId);
+                            if (containerDiv) {
+                                containerDiv.remove();
+                            }
+                            delete charts[chartKey];
                         }
                     });
                 })

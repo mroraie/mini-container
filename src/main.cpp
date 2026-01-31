@@ -231,7 +231,7 @@ static int handle_list(int argc, char *argv[])
 
     vector<container_info_t*> active_containers;
     for (int i = 0; i < count; i++) {
-        if (containers[i]->state != CONTAINER_DESTROYED && containers[i]->state != CONTAINER_STOPPED) {
+        if (containers[i]->state != CONTAINER_DESTROYED) {
             active_containers.push_back(containers[i]);
         }
     }
@@ -414,7 +414,7 @@ void display_compact_monitor() {
     
     vector<container_info_t*> active_containers;
     for (int i = 0; i < count; i++) {
-        if (containers[i]->state != CONTAINER_DESTROYED && containers[i]->state != CONTAINER_STOPPED) {
+        if (containers[i]->state != CONTAINER_DESTROYED) {
             active_containers.push_back(containers[i]);
         }
     }
@@ -540,7 +540,7 @@ void display_monitor() {
         
     vector<container_info_t*> active_containers;
     for (int i = 0; i < count; i++) {
-        if (containers[i]->state != CONTAINER_DESTROYED && containers[i]->state != CONTAINER_STOPPED) {
+        if (containers[i]->state != CONTAINER_DESTROYED) {
             active_containers.push_back(containers[i]);
         }
     }
