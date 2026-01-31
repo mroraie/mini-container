@@ -70,7 +70,7 @@ void SimpleWebServer::serverThread() {
         }
 
         std::cout << "Web server started on port " << port_ << std::endl;
-        std::cout << "Open http://localhost:" << port_ << " in your browser" << std::endl;
+        std::cout << "Open http:
 
         while (running_) {
             sockaddr_in client_addr{};
@@ -193,7 +193,7 @@ unsigned long SimpleWebServer::getSystemTotalMemory() {
             std::string label, value, unit;
             iss >> label >> value >> unit;
             unsigned long kb = std::stoul(value);
-            return kb * 1024; // Convert KB to bytes
+            return kb * 1024; 
         }
     }
     return 0;
@@ -212,10 +212,10 @@ unsigned long SimpleWebServer::getSystemAvailableMemory() {
             std::string label, value, unit;
             iss >> label >> value >> unit;
             unsigned long kb = std::stoul(value);
-            return kb * 1024; // Convert KB to bytes
+            return kb * 1024; 
         }
     }
-    // Fallback to MemFree if MemAvailable not available
+    
     meminfo.clear();
     meminfo.seekg(0);
     while (std::getline(meminfo, line)) {
@@ -224,7 +224,7 @@ unsigned long SimpleWebServer::getSystemAvailableMemory() {
             std::string label, value, unit;
             iss >> label >> value >> unit;
             unsigned long kb = std::stoul(value);
-            return kb * 1024; // Convert KB to bytes
+            return kb * 1024; 
         }
     }
     return 0;
@@ -235,7 +235,6 @@ std::string SimpleWebServer::getSystemInfoJSON() {
     unsigned long available_mem = getSystemAvailableMemory();
     unsigned long used_mem = total_mem - available_mem;
     
-    // Calculate total CPU and memory usage from all containers
     int count;
     container_info_t** containers = container_manager_list(cm_, &count);
     

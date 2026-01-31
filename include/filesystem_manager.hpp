@@ -32,4 +32,3 @@ int fs_cleanup_container_root(const char *root_path);
 #endif
 
 #endif
-

@@ -72,4 +72,3 @@ void resource_manager_cleanup(resource_manager_t *rm);
 #endif
 
 #endif
-

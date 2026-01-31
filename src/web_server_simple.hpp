@@ -30,5 +30,4 @@ private:
     int server_socket_;
 };
 
-#endif // WEB_SERVER_SIMPLE_HPP
-
+#endif 

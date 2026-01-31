@@ -30,7 +30,6 @@ int namespace_setup_isolation(const namespace_config_t *config);
 pid_t namespace_create_container(const namespace_config_t *config,
                                char **command, int argc);
 
-// Extended version with cgroup callback
 pid_t namespace_create_container_with_cgroup(const namespace_config_t *config,
                                             char **command, int argc,
                                             void (*add_to_cgroup_callback)(pid_t pid, void *user_data),
@@ -43,4 +42,3 @@ int namespace_join(pid_t target_pid, int ns_type);
 #endif
 
 #endif
-

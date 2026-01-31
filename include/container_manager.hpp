@@ -73,4 +73,3 @@ int container_manager_run(container_manager_t *cm, container_config_t *config);
 #endif
 
 #endif
-

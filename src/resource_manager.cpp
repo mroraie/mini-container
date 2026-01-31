@@ -53,7 +53,7 @@ static cgroup_version_t detect_cgroup_version() {
     if (access(CPU_CGROUP_PATH, F_OK) == 0 && access(MEMORY_CGROUP_PATH, F_OK) == 0) {
         return CGROUP_V1;
     }
-    return CGROUP_V1; // Default fallback
+    return CGROUP_V1; 
 }
 
 static int write_file(const char *path, const char *value, resource_manager_t *rm = nullptr) {
@@ -79,7 +79,7 @@ static int write_file(const char *path, const char *value, resource_manager_t *r
 static int read_file(const char *path, char *buffer, size_t size, resource_manager_t *rm = nullptr) {
     int fd = open(path, O_RDONLY);
     if (fd == -1) {
-        // Don't print error for missing files (they might not exist yet)
+        
         if (errno != ENOENT) {
             DEBUG_LOG(rm, "Warning: failed to open cgroup file %s: %s\n", path, strerror(errno));
         }
@@ -94,8 +94,7 @@ static int read_file(const char *path, char *buffer, size_t size, resource_manag
     }
 
     if (read_bytes == 0) {
-        // Empty files are normal for some cgroup entries (e.g. cgroup.procs can be empty).
-        // Treat as "no data" without logging to avoid noisy output.
+        
         close(fd);
         return -1;
     }
@@ -105,7 +104,6 @@ static int read_file(const char *path, char *buffer, size_t size, resource_manag
     return 0;
 }
 
-
 static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
                          const cpu_limits_t *limits) {
     char path[BUF_SIZE];
@@ -113,17 +111,14 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
     int quota_us = limits->quota_us;
     int period_us = limits->period_us > 0 ? limits->period_us : 100000;
 
-    // If quota is not set but shares is set, convert shares to quota
-    // shares of 1024 = 1 full CPU core, so shares/1024 gives us the fraction
     if (quota_us <= 0 && limits->shares > 0) {
-        // Convert shares to quota: shares/1024 * period_us
-        // Example: shares=256 means 256/1024 = 0.25 of a core
+        
         quota_us = (limits->shares * period_us) / 1024;
-        if (quota_us < 1000) quota_us = 1000; // Minimum 1ms
+        if (quota_us < 1000) quota_us = 1000; 
     }
 
     if (rm->version == CGROUP_V2) {
-        // cgroup2 uses cpu.max format: "quota period" or "max" for unlimited
+        
         if (quota_us > 0) {
             snprintf(path, sizeof(path), "%s/%s_%s/cpu.max", CGROUP_ROOT, rm->cgroup_path, container_id);
             snprintf(value, sizeof(value), "%d %d", quota_us, period_us);
@@ -131,23 +126,21 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
                 return -1;
             }
         } else {
-            // Unlimited CPU
+            
             snprintf(path, sizeof(path), "%s/%s_%s/cpu.max", CGROUP_ROOT, rm->cgroup_path, container_id);
             if (write_file(path, "max", rm) != 0) {
                 return -1;
             }
         }
     } else {
-        // cgroup v1
-        // Determine the correct CPU cgroup path
+        
         char cpu_path[BUF_SIZE];
         snprintf(cpu_path, sizeof(cpu_path), "%s/%s_%s", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
         if (access(cpu_path, F_OK) != 0) {
-            // Fallback to separate cpu path
+            
             snprintf(cpu_path, sizeof(cpu_path), "%s/%s_%s", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
         }
         
-        // Set quota and period for absolute CPU limit
         if (quota_us > 0) {
             int ret = snprintf(path, sizeof(path), "%s/cpu.cfs_quota_us", cpu_path);
             if (ret < 0 || (size_t)ret >= sizeof(path)) {
@@ -168,7 +161,6 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
             }
         }
         
-        // Also set shares for relative CPU weight (optional, for fairness)
         if (limits->shares > 0) {
             int ret = snprintf(path, sizeof(path), "%s/cpu.shares", cpu_path);
             if (ret < 0 || (size_t)ret >= sizeof(path)) {
@@ -190,7 +182,7 @@ static int set_memory_limits(resource_manager_t *rm, const char *container_id,
     char value[64];
 
     if (rm->version == CGROUP_V2) {
-        // cgroup2 uses memory.max
+        
         if (limits->limit_bytes > 0) {
             snprintf(path, sizeof(path), "%s/%s_%s/memory.max", CGROUP_ROOT, rm->cgroup_path, container_id);
             snprintf(value, sizeof(value), "%lu", limits->limit_bytes);
@@ -198,14 +190,13 @@ static int set_memory_limits(resource_manager_t *rm, const char *container_id,
                 return -1;
             }
         } else {
-            // Unlimited memory
+            
             snprintf(path, sizeof(path), "%s/%s_%s/memory.max", CGROUP_ROOT, rm->cgroup_path, container_id);
             if (write_file(path, "max", rm) != 0) {
                 return -1;
             }
         }
 
-        // cgroup2 uses memory.swap.max for swap limits
         if (limits->swap_limit_bytes > 0) {
             snprintf(path, sizeof(path), "%s/%s_%s/memory.swap.max", CGROUP_ROOT, rm->cgroup_path, container_id);
             snprintf(value, sizeof(value), "%lu", limits->swap_limit_bytes);
@@ -214,7 +205,7 @@ static int set_memory_limits(resource_manager_t *rm, const char *container_id,
             }
         }
     } else {
-        // cgroup v1
+        
         if (limits->limit_bytes > 0) {
             snprintf(path, sizeof(path), "%s/%s_%s/memory.limit_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
             snprintf(value, sizeof(value), "%lu", limits->limit_bytes);
@@ -246,7 +237,6 @@ int resource_manager_init(resource_manager_t *rm, const char *base_path) {
         return -1;
     }
 
-    // Detect cgroup version
     rm->version = detect_cgroup_version();
 
     if (rm->version == CGROUP_V2) {
@@ -256,7 +246,7 @@ int resource_manager_init(resource_manager_t *rm, const char *base_path) {
             fprintf(stderr, "Error: cgroup2 controllers not available\n");
             return -1;
         }
-        // Verify CPU and memory controllers are enabled
+        
         char buffer[BUF_SIZE];
         if (read_file(controllers_path, buffer, sizeof(buffer), rm) == 0) {
             if (strstr(buffer, "cpu") == nullptr || strstr(buffer, "memory") == nullptr) {
@@ -265,7 +255,7 @@ int resource_manager_init(resource_manager_t *rm, const char *base_path) {
             }
         }
     } else {
-        // cgroup v1 - check for CPU and memory subsystems
+        
         if (access(CPU_CGROUP_PATH, F_OK) != 0) {
             fprintf(stderr, "Error: CPU cgroup subsystem not available\n");
             return -1;
@@ -283,7 +273,7 @@ int resource_manager_init(resource_manager_t *rm, const char *base_path) {
         return -1;
     }
 
-    rm->debug_log_callback = nullptr; // Initialize to null
+    rm->debug_log_callback = nullptr; 
     rm->initialized = 1;
     return 0;
 }
@@ -298,17 +288,17 @@ int resource_manager_create_cgroup(resource_manager_t *rm,
     char path[BUF_SIZE];
 
     if (rm->version == CGROUP_V2) {
-        // cgroup2: create unified cgroup directory
+        
         snprintf(path, sizeof(path), "%s/%s_%s", CGROUP_ROOT, rm->cgroup_path, container_id);
         if (mkdir(path, 0755) == -1 && errno != EEXIST) {
             perror("mkdir cgroup2 directory failed");
             return -1;
         }
     } else {
-        // cgroup v1: create separate directories for CPU and memory
+        
         snprintf(path, sizeof(path), "%s/%s_%s", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
         if (mkdir(path, 0755) == -1 && errno != EEXIST) {
-            // Fallback to separate cpu and cpuacct
+            
             snprintf(path, sizeof(path), "%s/%s_%s", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
             if (mkdir(path, 0755) == -1 && errno != EEXIST) {
                 perror("mkdir CPU cgroup failed");
@@ -317,7 +307,7 @@ int resource_manager_create_cgroup(resource_manager_t *rm,
 
             snprintf(path, sizeof(path), "%s/%s_%s", CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
             if (mkdir(path, 0755) == -1 && errno != EEXIST) {
-                // cpuacct might not exist separately, continue
+                
             }
         }
 
@@ -328,21 +318,17 @@ int resource_manager_create_cgroup(resource_manager_t *rm,
         }
     }
 
-    // Always set CPU limits if shares or quota is specified
-    // This ensures cgroups are properly configured regardless of enabled flag
     if (limits->cpu.shares > 0 || limits->cpu.quota_us > 0) {
         if (set_cpu_limits(rm, container_id, &limits->cpu) != 0) {
             fprintf(stderr, "Warning: failed to set CPU limits for container %s\n", container_id);
-            // Don't fail completely, but log the warning
+            
         }
     }
 
-    // Always set memory limits if limit_bytes is specified
-    // This ensures cgroups are properly configured regardless of enabled flag
     if (limits->memory.limit_bytes > 0) {
         if (set_memory_limits(rm, container_id, &limits->memory) != 0) {
             fprintf(stderr, "Warning: failed to set memory limits for container %s\n", container_id);
-            // Don't fail completely, but log the warning
+            
         }
     }
 
@@ -356,7 +342,7 @@ static int add_all_threads_to_cgroup(resource_manager_t *rm, const char *contain
     
     DIR *dir = opendir(task_dir_path);
     if (!dir) {
-        // If /proc/<pid>/task doesn't exist, just add the main PID
+        
         char pid_str[32];
         snprintf(pid_str, sizeof(pid_str), "%d", pid);
         return write_file(cgroup_path, pid_str, rm);
@@ -365,7 +351,7 @@ static int add_all_threads_to_cgroup(resource_manager_t *rm, const char *contain
     struct dirent *entry;
     int added = 0;
     while ((entry = readdir(dir)) != nullptr) {
-        if (entry->d_name[0] == '.') continue; // Skip . and ..
+        if (entry->d_name[0] == '.') continue; 
         
         char tid_str[32];
         strncpy(tid_str, entry->d_name, sizeof(tid_str) - 1);
@@ -392,7 +378,7 @@ int resource_manager_add_process(resource_manager_t *rm,
     snprintf(pid_str, sizeof(pid_str), "%d", pid);
 
     if (rm->version == CGROUP_V2) {
-        // cgroup2 uses cgroup.procs (automatically includes all threads)
+        
         snprintf(path, sizeof(path), "%s/%s_%s/cgroup.procs", CGROUP_ROOT, rm->cgroup_path, container_id);
         DEBUG_LOG(rm, "Debug: Adding process %d to cgroup v2: %s\n", pid, path);
         if (write_file(path, pid_str, rm) != 0) {
@@ -401,10 +387,9 @@ int resource_manager_add_process(resource_manager_t *rm,
         }
         DEBUG_LOG(rm, "Debug: Successfully added process %d to cgroup v2\n", pid);
     } else {
-        // cgroup v1 uses tasks - need to add all threads
+        
         int added = 0;
         
-        // Try cpu,cpuacct first (most common)
         snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
         DEBUG_LOG(rm, "Debug: Trying to add process %d to cgroup v1: %s\n", pid, path);
         if (add_all_threads_to_cgroup(rm, container_id, pid, path) == 0) {
@@ -412,7 +397,7 @@ int resource_manager_add_process(resource_manager_t *rm,
             DEBUG_LOG(rm, "Debug: Successfully added process %d threads to cpu,cpuacct cgroup\n", pid);
         } else {
             DEBUG_LOG(rm, "Debug: Failed to add to cpu,cpuacct (errno=%d: %s), trying fallback...\n", errno, strerror(errno));
-            // Fallback to separate cpu and cpuacct
+            
             snprintf(path, sizeof(path), "%s/%s_%s/tasks", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
             if (add_all_threads_to_cgroup(rm, container_id, pid, path) == 0) {
                 added = 1;
@@ -428,12 +413,12 @@ int resource_manager_add_process(resource_manager_t *rm,
             } else {
                 DEBUG_LOG(rm, "Debug: Failed to add to cpuacct cgroup (errno=%d: %s)\n", errno, strerror(errno));
             }
-            // cpuacct might not exist separately, continue
+            
         }
 
         if (!added) {
             DEBUG_LOG(rm, "Warning: failed to add process %d to any CPU cgroup\n", pid);
-            // Return error if we couldn't add to any CPU cgroup
+            
             return -1;
         }
 
@@ -441,7 +426,7 @@ int resource_manager_add_process(resource_manager_t *rm,
         DEBUG_LOG(rm, "Debug: Adding process %d threads to memory cgroup: %s\n", pid, path);
         if (add_all_threads_to_cgroup(rm, container_id, pid, path) != 0) {
             DEBUG_LOG(rm, "Warning: failed to add process %d threads to memory cgroup: %s (errno=%d: %s)\n", pid, path, errno, strerror(errno));
-            // Return error if memory cgroup fails - it's critical for resource limits
+            
             return -1;
         } else {
             DEBUG_LOG(rm, "Debug: Successfully added process %d threads to memory cgroup\n", pid);
@@ -472,7 +457,7 @@ int resource_manager_destroy_cgroup(resource_manager_t *rm,
         snprintf(path, sizeof(path), "%s/%s_%s", CGROUP_ROOT, rm->cgroup_path, container_id);
         rmdir(path);
     } else {
-        // Try cpu,cpuacct first
+        
         snprintf(path, sizeof(path), "%s/%s_%s", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
         rmdir(path);
         
@@ -502,15 +487,12 @@ int resource_manager_get_stats(resource_manager_t *rm,
     char path[BUF_SIZE];
     char buffer[BUF_SIZE];
     
-    // Initialize to 0
     if (cpu_usage) *cpu_usage = 0;
     if (memory_usage) *memory_usage = 0;
     
-    // Debug: Print cgroup path being checked
     DEBUG_LOG(rm, "Debug: Getting stats for container %s, cgroup_path=%s, version=%s\n", 
             container_id, rm->cgroup_path, rm->version == CGROUP_V2 ? "v2" : "v1");
     
-    // For cgroup v2, check if there are any processes in the cgroup
     if (rm->version == CGROUP_V2) {
         snprintf(path, sizeof(path), "%s/%s_%s/cgroup.procs", CGROUP_ROOT, rm->cgroup_path, container_id);
         if (read_file(path, buffer, sizeof(buffer), rm) == 0) {
@@ -523,19 +505,18 @@ int resource_manager_get_stats(resource_manager_t *rm,
     }
 
     if (cpu_usage) {
-        *cpu_usage = 0; // Initialize to 0
+        *cpu_usage = 0; 
         if (rm->version == CGROUP_V2) {
-            // cgroup2: read from cpu.stat (format: usage_usec <value>)
+            
             snprintf(path, sizeof(path), "%s/%s_%s/cpu.stat", CGROUP_ROOT, rm->cgroup_path, container_id);
             DEBUG_LOG(rm, "Debug: Attempting to read cpu.stat from %s\n", path);
             if (read_file(path, buffer, sizeof(buffer), rm) == 0) {
                 DEBUG_LOG(rm, "Debug: Successfully read cpu.stat, content length: %zu, content: '%s'\n", strlen(buffer), buffer);
-                // Parse usage_usec from cpu.stat
-                // Format: usage_usec <value>\n
+                
                 char *usage_line = strstr(buffer, "usage_usec");
                 if (usage_line) {
                     DEBUG_LOG(rm, "Debug: Found usage_usec line in cpu.stat\n");
-                    // Skip "usage_usec" and whitespace
+                    
                     char *value_start = usage_line;
                     while (*value_start && *value_start != ' ' && *value_start != '\t') value_start++;
                     while (*value_start && (*value_start == ' ' || *value_start == '\t')) value_start++;
@@ -543,7 +524,7 @@ int resource_manager_get_stats(resource_manager_t *rm,
                         char *endptr;
                         unsigned long val = strtoul(value_start, &endptr, 10);
                         if (endptr != value_start) {
-                            *cpu_usage = val * 1000; // Convert microseconds to nanoseconds
+                            *cpu_usage = val * 1000; 
                             DEBUG_LOG(rm, "Debug: Parsed CPU usage from cpu.stat: %lu microseconds = %lu nanoseconds\n", val, *cpu_usage);
                         } else {
                             DEBUG_LOG(rm, "Debug: Failed to parse usage_usec value from '%s'\n", value_start);
@@ -558,7 +539,7 @@ int resource_manager_get_stats(resource_manager_t *rm,
                 DEBUG_LOG(rm, "Debug: Failed to read cpu.stat from %s (errno=%d: %s)\n", path, errno, strerror(errno));
             }
         } else {
-            // cgroup v1: read from cpuacct.usage
+            
             char cpuacct_path[BUF_SIZE];
             if (find_cpuacct_usage_path(rm, container_id, cpuacct_path, sizeof(cpuacct_path)) == 0) {
                 DEBUG_LOG(rm, "Debug: Found cpuacct.usage at %s\n", cpuacct_path);
@@ -588,9 +569,9 @@ int resource_manager_get_stats(resource_manager_t *rm,
     }
 
     if (memory_usage) {
-        *memory_usage = 0; // Initialize to 0
+        *memory_usage = 0; 
         if (rm->version == CGROUP_V2) {
-            // cgroup2: read from memory.current
+            
             snprintf(path, sizeof(path), "%s/%s_%s/memory.current", CGROUP_ROOT, rm->cgroup_path, container_id);
             DEBUG_LOG(rm, "Debug: Attempting to read memory.current from %s\n", path);
             if (read_file(path, buffer, sizeof(buffer), rm) == 0) {
@@ -607,7 +588,7 @@ int resource_manager_get_stats(resource_manager_t *rm,
                 DEBUG_LOG(rm, "Debug: Failed to read memory.current from %s (errno=%d: %s)\n", path, errno, strerror(errno));
             }
         } else {
-            // cgroup v1: read from memory.usage_in_bytes
+            
             snprintf(path, sizeof(path), "%s/%s_%s/memory.usage_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
             DEBUG_LOG(rm, "Debug: Reading memory from %s (exists: %s)\n", path, access(path, F_OK) == 0 ? "yes" : "no");
             if (read_file(path, buffer, sizeof(buffer), rm) == 0) {
@@ -648,4 +629,3 @@ void resource_manager_cleanup(resource_manager_t *rm) {
     free(rm->cgroup_path);
     rm->initialized = 0;
 }
-

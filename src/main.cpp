@@ -229,7 +229,6 @@ static int handle_list(int argc, char *argv[])
     int count;
     container_info_t **containers = container_manager_list(&cm, &count);
 
-    // Filter out destroyed and stopped containers
     vector<container_info_t*> active_containers;
     for (int i = 0; i < count; i++) {
         if (containers[i]->state != CONTAINER_DESTROYED && containers[i]->state != CONTAINER_STOPPED) {
@@ -413,7 +412,6 @@ void display_compact_monitor() {
     int count;
     container_info_t **containers = container_manager_list(&cm, &count);
     
-    // Filter out destroyed and stopped containers
     vector<container_info_t*> active_containers;
     for (int i = 0; i < count; i++) {
         if (containers[i]->state != CONTAINER_DESTROYED && containers[i]->state != CONTAINER_STOPPED) {
@@ -540,7 +538,6 @@ void display_monitor() {
         int count;
         container_info_t **containers = container_manager_list(&cm, &count);
         
-    // Filter out destroyed and stopped containers
     vector<container_info_t*> active_containers;
     for (int i = 0; i < count; i++) {
         if (containers[i]->state != CONTAINER_DESTROYED && containers[i]->state != CONTAINER_STOPPED) {
@@ -654,7 +651,7 @@ void display_monitor() {
         
         tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
         
-        usleep(5000000); // 5 seconds
+        usleep(5000000); 
     }
     
     show_cursor();
@@ -670,7 +667,7 @@ void interactive_create_container() {
     
     char command[1024];
     char container_name[256] = "";
-    char root_path[512] = "/";  // Use real root for demo (allows /bin/sh to work)
+    char root_path[512] = "/";  
     int memory = 128;
     int cpu = 1024;
     
@@ -684,7 +681,6 @@ void interactive_create_container() {
         }
     }
     
-    // Display suggested commands
     set_color(COLOR_CYAN);
     printf("\nSuggested Commands for Testing\n");
     reset_color();
@@ -834,11 +830,11 @@ void interactive_create_container() {
         }
     }
     
-    // Cleanup
     for (auto arg : args) {
         if (arg) free(arg);
     }
-    free(config.fs_config.root_path);
+    if (config.id) free(config.id);
+    if (config.fs_config.root_path) free(config.fs_config.root_path);
     
     printf("\nPress Enter to continue...");
     getchar();
@@ -881,7 +877,7 @@ void run_tests() {
         printf("\n[Test 1] CPU Usage Test...\n");
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
-        config.fs_config.root_path = strdup("/");  // Use real root for demo
+        config.fs_config.root_path = strdup("/");  
         
         args.clear();
         args.push_back(strdup("/bin/sh"));
@@ -917,7 +913,7 @@ void run_tests() {
         config.id = container_id;
         config.res_limits.memory.limit_bytes = 64 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
-        config.fs_config.root_path = strdup("/");  // Use real root for demo
+        config.fs_config.root_path = strdup("/");  
         
         args.clear();
         args.push_back(strdup("/bin/sh"));
@@ -952,7 +948,7 @@ void run_tests() {
         config.id = container_id;
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 512;
-        config.fs_config.root_path = strdup("/");  // Use real root for demo
+        config.fs_config.root_path = strdup("/");  
         
         args.clear();
         args.push_back(strdup("/bin/sh"));
@@ -987,7 +983,7 @@ void run_tests() {
         config.id = container_id;
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
-        config.fs_config.root_path = strdup("/");  // Use real root for demo
+        config.fs_config.root_path = strdup("/");  
         
         args.clear();
         args.push_back(strdup("/bin/sh"));
@@ -1483,10 +1479,22 @@ void interactive_menu() {
                             if (len > 0 && id[len-1] == '\n') {
                                 id[len-1] = '\0';
                             }
-                            char cmd_stop[] = "stop";
-                            char* argv[] = {cmd_stop, id, nullptr};
-                            handle_stop(2, argv);
+                            
+                            char *start = id;
+                            while (*start == ' ' || *start == '\t') start++;
+                            char *end = id + strlen(id) - 1;
+                            while (end > start && (*end == ' ' || *end == '\t')) end--;
+                            *(end + 1) = '\0';
+                            
+                            if (strlen(start) > 0) {
+                                char cmd_stop[] = "stop";
+                                char* argv[] = {cmd_stop, start, nullptr};
+                                handle_stop(2, argv);
+                            } else {
+                                printf("Error: Container ID cannot be empty\n");
+                            }
                             printf("\nPress Enter to continue...");
+                            fflush(stdout);
                             getchar();
                         }
                         break;
@@ -1501,7 +1509,7 @@ void interactive_menu() {
                             if (len > 0 && id[len-1] == '\n') {
                                 id[len-1] = '\0';
                             }
-                            // Trim leading and trailing whitespace
+                            
                             char *start = id;
                             while (*start == ' ' || *start == '\t') start++;
                             char *end = id + strlen(id) - 1;
@@ -1509,7 +1517,7 @@ void interactive_menu() {
                             *(end + 1) = '\0';
                             
                             if (strlen(start) > 0) {
-                                // First check if container exists
+                                
                                 container_info_t *info = container_manager_get_info(&cm, start);
                                 if (info) {
                                     char cmd_destroy[] = "destroy";
@@ -1527,7 +1535,7 @@ void interactive_menu() {
                             }
                             printf("\nPress Enter to continue...");
                             fflush(stdout);
-                            // Clear any remaining input
+                            
                             int c;
                             while ((c = getchar()) != '\n' && c != EOF);
                         }
@@ -1561,7 +1569,7 @@ void interactive_menu() {
                             if (len > 0 && id[len-1] == '\n') {
                                 id[len-1] = '\0';
                             }
-                            // Trim leading and trailing whitespace
+                            
                             char *start = id;
                             while (*start == ' ' || *start == '\t') start++;
                             char *end = id + strlen(id) - 1;
@@ -1639,7 +1647,7 @@ void interactive_menu() {
                         break;
                     }
                     case 0: {
-                        // Stop all running containers before exit
+                        
                         int count;
                         container_info_t **containers = container_manager_list(&cm, &count);
                         int stopped_count = 0;
@@ -1689,13 +1697,11 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Warning: container operations typically require root privileges\n");
     }
 
-    // Start web server automatically
     web_server = new SimpleWebServer(&cm, 808);
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     web_server->start();
 
-    // If no arguments, run interactive menu
     if (argc < 2)
     {
         interactive_menu();
@@ -1707,7 +1713,6 @@ int main(int argc, char *argv[])
         return EXIT_SUCCESS;
     }
 
-    // Otherwise, handle command line arguments
     const char *command = argv[1];
     int result = EXIT_FAILURE;
 

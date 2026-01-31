@@ -49,8 +49,6 @@ static struct {
     {nullptr, 0, 0}
 };
 
-
-
 static int mkdir_p(const char *path) {
     if (!path) return -1;
 
@@ -170,7 +168,6 @@ int fs_setup_chroot(const char *root_path) {
     return 0;
 }
 
-
 int fs_mount_container_filesystems(const char *root_path) {
     if (!root_path) {
         fprintf(stderr, "Error: root path cannot be NULL\n");
@@ -269,4 +266,3 @@ int fs_cleanup_container_root(const char *root_path) {
 
     return 0;
 }
-
