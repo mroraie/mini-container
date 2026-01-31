@@ -178,7 +178,7 @@ std::string SimpleWebServer::getContainerListJSON() {
 
         std::vector<container_info_t*> active_containers;
         for (int i = 0; i < count; i++) {
-            if (containers[i]->state != CONTAINER_DESTROYED && containers[i]->state != CONTAINER_STOPPED) {
+            if (containers[i]->state != CONTAINER_DESTROYED) {
                 active_containers.push_back(containers[i]);
             }
         }
@@ -587,7 +587,7 @@ std::string SimpleWebServer::generateHTML() {
         }
 
         updateContainers();
-        setInterval(updateContainers, 1000);
+        setInterval(updateContainers, 10000);
     </script>
 </body>
 </html>
