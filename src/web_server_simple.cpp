@@ -70,7 +70,7 @@ void SimpleWebServer::serverThread() {
         }
 
         std::cout << "Web server started on port " << port_ << std::endl;
-        std::cout << "Open http:
+        std::cout << "Open http://localhost:" << port_ << " in your browser" << std::endl;
 
         while (running_) {
             sockaddr_in client_addr{};
@@ -230,44 +230,54 @@ unsigned long SimpleWebServer::getSystemAvailableMemory() {
     return 0;
 }
 
+double SimpleWebServer::getSystemCPUPercent() {
+    static unsigned long prev_idle = 0, prev_total = 0;
+    
+    std::ifstream stat("/proc/stat");
+    if (!stat.is_open()) {
+        return 0.0;
+    }
+    
+    std::string line;
+    if (std::getline(stat, line)) {
+        if (line.find("cpu ") == 0) {
+            std::istringstream iss(line);
+            std::string cpu_label;
+            unsigned long user, nice, system, idle, iowait, irq, softirq, steal;
+            iss >> cpu_label >> user >> nice >> system >> idle >> iowait >> irq >> softirq >> steal;
+            
+            unsigned long total = user + nice + system + idle + iowait + irq + softirq + steal;
+            unsigned long total_idle = idle + iowait;
+            
+            if (prev_total > 0) {
+                unsigned long total_diff = total - prev_total;
+                unsigned long idle_diff = total_idle - prev_idle;
+                
+                if (total_diff > 0) {
+                    double cpu_percent = 100.0 * (1.0 - ((double)idle_diff / (double)total_diff));
+                    prev_idle = total_idle;
+                    prev_total = total;
+                    return cpu_percent;
+                }
+            }
+            
+            prev_idle = total_idle;
+            prev_total = total;
+        }
+    }
+    
+    return 0.0;
+}
+
 std::string SimpleWebServer::getSystemInfoJSON() {
     unsigned long total_mem = getSystemTotalMemory();
     unsigned long available_mem = getSystemAvailableMemory();
     unsigned long used_mem = total_mem - available_mem;
-    
-    int count;
-    container_info_t** containers = container_manager_list(cm_, &count);
-    
-    unsigned long total_container_memory = 0;
-    double total_container_cpu_percent = 0.0;
-    int running_count = 0;
-    
-    for (int i = 0; i < count; i++) {
-        container_info_t* info = containers[i];
-        if (info->state == CONTAINER_RUNNING) {
-            running_count++;
-            unsigned long cpu_usage = 0, memory_usage = 0;
-            resource_manager_get_stats(cm_->rm, info->id, &cpu_usage, &memory_usage);
-            total_container_memory += memory_usage;
-            
-            if (info->started_at > 0) {
-                time_t now = time(nullptr);
-                long elapsed = now - info->started_at;
-                if (elapsed > 0) {
-                    double cpu_seconds = cpu_usage / 1e9;
-                    double cpu_percent = (cpu_seconds / elapsed) * 100.0;
-                    total_container_cpu_percent += cpu_percent;
-                }
-            }
-        }
-    }
+    double cpu_percent = getSystemCPUPercent();
     
     std::string json = "{";
-    json += "\"total_memory\":" + std::to_string(total_mem) + ",";
-    json += "\"available_memory\":" + std::to_string(available_mem) + ",";
     json += "\"used_memory\":" + std::to_string(used_mem) + ",";
-    json += "\"total_container_memory\":" + std::to_string(total_container_memory) + ",";
-    json += "\"total_container_cpu_percent\":" + std::to_string(total_container_cpu_percent);
+    json += "\"cpu_percent\":" + std::to_string(cpu_percent);
     json += "}";
     return json;
 }
@@ -278,234 +288,60 @@ std::string SimpleWebServer::generateHTML() {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Mini Container Monitor</title>
+    <title>System Monitor</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { color: #333; }
-        .stats { margin: 20px 0; padding: 10px; background: #f5f5f5; }
-        .stats span { margin-right: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #4CAF50; color: white; }
-        tr:nth-child(even) { background-color: #f2f2f2; }
-        .running { color: green; }
-        .stopped { color: red; }
-        .created { color: orange; }
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f0f0f0; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; margin-bottom: 30px; }
+        .stat-box { margin: 20px 0; padding: 20px; background: #f8f8f8; border-radius: 8px; border-left: 4px solid #4CAF50; }
+        .stat-label { font-size: 14px; color: #666; margin-bottom: 8px; }
+        .stat-value { font-size: 32px; font-weight: bold; color: #333; }
+        .cpu { border-left-color: #2196F3; }
+        .ram { border-left-color: #FF9800; }
     </style>
 </head>
 <body>
-    <h1>Mini Container Monitor</h1>
-    
-    <div class="stats">
-        <span>Active: <strong id="running-count">0</strong></span>
-        <span>Total: <strong id="total-count">0</strong></span>
-        <span>Total CPU: <strong id="total-cpu">0.0%</strong></span>
-        <span>Total Memory: <strong id="total-memory">--</strong></span>
-        <span>Available Memory: <strong id="available-memory">--</strong></span>
-        <span>Last Update: <strong id="update-time">--:--:--</strong></span>
+    <div class="container">
+        <h1>System Monitor</h1>
+        
+        <div class="stat-box cpu">
+            <div class="stat-label">CPU Usage</div>
+            <div class="stat-value" id="cpu-usage">0.0%</div>
+        </div>
+        
+        <div class="stat-box ram">
+            <div class="stat-label">RAM Usage</div>
+            <div class="stat-value" id="ram-usage">0 MB</div>
+        </div>
     </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>PID</th>
-                <th>Status</th>
-                <th>CPU</th>
-                <th>Memory</th>
-                <th>Runtime</th>
-                <th>Created</th>
-            </tr>
-        </thead>
-        <tbody id="container-table-body">
-            <tr><td colspan="7">Loading...</td></tr>
-        </tbody>
-    </table>
-
     <script>
-        const prevCpuUsage = {};
-        const prevUpdateTime = {};
-
         function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+            if (!bytes || bytes === 0) return '0 MB';
+            const mb = bytes / (1024 * 1024);
+            return mb.toFixed(2) + ' MB';
         }
 
-        function formatTime(seconds) {
-            if (!seconds) return '--';
-            const hours = Math.floor(seconds / 3600);
-            const minutes = Math.floor((seconds % 3600) / 60);
-            const secs = seconds % 60;
-            if (hours > 0) {
-                return hours + ':' + String(minutes).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
-            }
-            return minutes + ':' + String(secs).padStart(2, '0');
-        }
-
-        function formatDate(timestamp) {
-            if (!timestamp) return '--';
-            const date = new Date(timestamp * 1000);
-            return date.toLocaleTimeString('en-US');
-        }
-
-        function calculateCPUPercent(containerId, cpuUsageNs, currentTime) {
-            cpuUsageNs = typeof cpuUsageNs === 'string' ? parseFloat(cpuUsageNs) : cpuUsageNs;
-            if (!cpuUsageNs || isNaN(cpuUsageNs) || cpuUsageNs === 0) return 0;
-            
-            const prev = prevCpuUsage[containerId];
-            const prevTime = prevUpdateTime[containerId];
-            
-            if (!prev || !prevTime) {
-                prevCpuUsage[containerId] = cpuUsageNs;
-                prevUpdateTime[containerId] = currentTime;
-                return 0;
-            }
-            
-            const timeDiff = (currentTime - prevTime) / 1000;
-            if (timeDiff <= 0 || timeDiff > 10) {
-                prevCpuUsage[containerId] = cpuUsageNs;
-                prevUpdateTime[containerId] = currentTime;
-                return 0;
-            }
-            
-            const cpuDiff = cpuUsageNs - prev;
-            if (cpuDiff < 0) {
-                prevCpuUsage[containerId] = cpuUsageNs;
-                prevUpdateTime[containerId] = currentTime;
-                return 0;
-            }
-            
-            const cpuPercent = (cpuDiff / 1e9 / timeDiff) * 100;
-            
-            prevCpuUsage[containerId] = cpuUsageNs;
-            prevUpdateTime[containerId] = currentTime;
-            
-            return Math.min(100, Math.max(0, cpuPercent));
-        }
-
-        function updateMonitor() {
-            Promise.all([
-                fetch('/api/containers').then(r => r.json()),
-                fetch('/api/system').then(r => r.json())
-            ])
-                .then(([containerData, systemData]) => {
-                    const tbody = document.getElementById('container-table-body');
-                    const runningCount = document.getElementById('running-count');
-                    const totalCount = document.getElementById('total-count');
-                    const totalCpu = document.getElementById('total-cpu');
-                    const totalMemory = document.getElementById('total-memory');
-                    const availableMemory = document.getElementById('available-memory');
-                    const updateTime = document.getElementById('update-time');
-
-                    const running = containerData.containers ? containerData.containers.filter(c => c.state === 'RUNNING').length : 0;
-                    const total = containerData.containers ? containerData.containers.length : 0;
-                    runningCount.textContent = running;
-                    totalCount.textContent = total;
-
-                    if (systemData) {
-                        if (systemData.total_container_cpu_percent !== undefined) {
-                            totalCpu.textContent = parseFloat(systemData.total_container_cpu_percent).toFixed(1) + '%';
-                        }
-                        if (systemData.total_memory !== undefined) {
-                            totalMemory.textContent = formatBytes(parseInt(systemData.total_memory));
-                        }
-                        if (systemData.available_memory !== undefined) {
-                            availableMemory.textContent = formatBytes(parseInt(systemData.available_memory));
-                        }
+        function updateStats() {
+            fetch('/api/system')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.cpu_percent !== undefined) {
+                        document.getElementById('cpu-usage').textContent = 
+                            parseFloat(data.cpu_percent).toFixed(1) + '%';
                     }
-
-                    const now = new Date();
-                    updateTime.textContent = now.toLocaleTimeString('en-US');
-
-                    tbody.innerHTML = '';
-
-                    if (!containerData.containers || containerData.containers.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="7" class="no-containers">No containers found</td></tr>';
-                        return;
+                    if (data.used_memory !== undefined) {
+                        document.getElementById('ram-usage').textContent = 
+                            formatBytes(parseInt(data.used_memory));
                     }
-
-                    const sorted = [...containerData.containers].sort((a, b) => {
-                        if (a.state === 'RUNNING' && b.state !== 'RUNNING') return -1;
-                        if (a.state !== 'RUNNING' && b.state === 'RUNNING') return 1;
-                        return (b.started_at || 0) - (a.started_at || 0);
-                    });
-
-                    sorted.forEach(container => {
-                        const row = document.createElement('tr');
-                        
-                        const statusClass = 'status-' + container.state.toLowerCase();
-                        const statusText = {
-                            'created': 'CREATED',
-                            'running': 'RUNNING',
-                            'stopped': 'STOPPED',
-                            'destroyed': 'DESTROYED'
-                        }[container.state.toLowerCase()] || container.state;
-
-                        let cpuDisplay = '--';
-                        let cpuPercent = 0;
-                        const currentTime = Date.now();
-                        if (container.state === 'RUNNING') {
-                            let cpuUsage = container.cpu_usage;
-                            if (typeof cpuUsage === 'string') {
-                                cpuUsage = parseFloat(cpuUsage);
-                            }
-                            if (cpuUsage !== undefined && cpuUsage !== null && !isNaN(cpuUsage) && cpuUsage >= 0) {
-                                cpuPercent = calculateCPUPercent(container.id, cpuUsage, currentTime);
-                                cpuDisplay = cpuPercent.toFixed(1) + '%';
-                            } else {
-                                cpuDisplay = '0.0%';
-                            }
-                        }
-
-                        let memoryDisplay = '--';
-                        let memoryPercent = 0;
-                        if (container.state === 'RUNNING') {
-                            let memoryUsage = container.memory_usage;
-                            if (typeof memoryUsage === 'string') {
-                                memoryUsage = parseFloat(memoryUsage);
-                            }
-                            if (memoryUsage !== undefined && memoryUsage !== null && !isNaN(memoryUsage) && memoryUsage >= 0) {
-                                memoryDisplay = formatBytes(memoryUsage);
-                            } else {
-                                memoryDisplay = '0 B';
-                            }
-                        }
-
-                        const runtime = container.started_at ? 
-                            Math.floor(Date.now() / 1000) - container.started_at : 0;
-
-                        const statusClassMap = {
-                            'running': 'running',
-                            'stopped': 'stopped',
-                            'created': 'created'
-                        };
-                        const statusClass = statusClassMap[container.state.toLowerCase()] || '';
-
-                        row.innerHTML = `
-                            <td>${container.id}</td>
-                            <td>${container.pid || '-----'}</td>
-                            <td class="${statusClass}">${statusText}</td>
-                            <td>${cpuDisplay}</td>
-                            <td>${memoryDisplay}</td>
-                            <td>${formatTime(runtime)}</td>
-                            <td>${formatDate(container.created_at)}</td>
-                        `;
-
-                        tbody.appendChild(row);
-                    });
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    document.getElementById('container-table-body').innerHTML = 
-                        '<tr><td colspan="7">Error loading data</td></tr>';
                 });
         }
 
-        updateMonitor();
-        setInterval(updateMonitor, 5000);
+        updateStats();
+        setInterval(updateStats, 1000);
     </script>
 </body>
 </html>

@@ -22,6 +22,7 @@ private:
     std::string getSystemInfoJSON();
     unsigned long getSystemTotalMemory();
     unsigned long getSystemAvailableMemory();
+    double getSystemCPUPercent();
 
     container_manager_t* cm_;
     int port_;

@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
     web_server->start();
 
     cout << "Web server started on port " << port << endl;
-    cout << "Open http:
+    cout << "Open http://localhost:" << port << " in your browser" << endl;
     cout << "Press Ctrl+C to stop" << endl;
 
     while (running) {
