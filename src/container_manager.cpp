@@ -15,7 +15,6 @@
 using namespace std;
 
 #define MAX_CONTAINER_ID 64
-
 #define DEFAULT_MAX_CONTAINERS 10
 
 #define STATE_FILE_PATH "/var/run/mini-container/state.json"
