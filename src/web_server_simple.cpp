@@ -8,6 +8,8 @@
 #include <iostream>
 #include <fstream>
 #include <ctime>
+#include <vector>
+#include <cstdlib>
 
 SimpleWebServer::SimpleWebServer(container_manager_t* cm, int port)
     : cm_(cm), port_(port), running_(false), server_socket_(-1) {
@@ -142,19 +144,103 @@ std::string SimpleWebServer::handleRequest(const std::string& request) {
         }
 }
 
+static unsigned long read_cgroup_limit(const char* path) {
+    char buffer[256];
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        return 0;
+    }
+    file.getline(buffer, sizeof(buffer));
+    file.close();
+    
+    if (strcmp(buffer, "max") == 0) {
+        return 0;
+    }
+    
+    char* endptr;
+    unsigned long val = strtoul(buffer, &endptr, 10);
+    if (*endptr == '\0' || *endptr == '\n' || *endptr == ' ') {
+        return val;
+    }
+    return 0;
+}
+
 std::string SimpleWebServer::getContainerListJSON() {
         std::string json = "{\"containers\":[";
 
         int count;
         container_info_t** containers = container_manager_list(cm_, &count);
 
+        std::vector<container_info_t*> active_containers;
         for (int i = 0; i < count; i++) {
-            container_info_t* info = containers[i];
+            if (containers[i]->state != CONTAINER_DESTROYED && containers[i]->state != CONTAINER_STOPPED) {
+                active_containers.push_back(containers[i]);
+            }
+        }
+
+        for (size_t i = 0; i < active_containers.size(); i++) {
+            container_info_t* info = active_containers[i];
             if (i > 0) json += ",";
 
             unsigned long cpu_usage = 0, memory_usage = 0;
+            unsigned long cpu_limit = 0, memory_limit = 0;
+            double cpu_percent = 0.0;
+            double memory_percent = 0.0;
+            
             if (info->state == CONTAINER_RUNNING) {
                 resource_manager_get_stats(cm_->rm, info->id, &cpu_usage, &memory_usage);
+                
+                char path[512];
+                unsigned long cpu_quota_us = 0;
+                unsigned long cpu_period_us = 100000;
+                
+                if (cm_->rm->version == CGROUP_V2) {
+                    snprintf(path, sizeof(path), "%s/%s_%s/cpu.max", "/sys/fs/cgroup", cm_->rm->cgroup_path, info->id);
+                    std::string cpu_max_line;
+                    std::ifstream cpu_file(path);
+                    if (cpu_file.is_open()) {
+                        std::getline(cpu_file, cpu_max_line);
+                        cpu_file.close();
+                        if (cpu_max_line != "max") {
+                            size_t space_pos = cpu_max_line.find(' ');
+                            if (space_pos != std::string::npos) {
+                                cpu_quota_us = std::stoul(cpu_max_line.substr(0, space_pos));
+                                cpu_period_us = std::stoul(cpu_max_line.substr(space_pos + 1));
+                            }
+                        }
+                    }
+                    
+                    snprintf(path, sizeof(path), "%s/%s_%s/memory.max", "/sys/fs/cgroup", cm_->rm->cgroup_path, info->id);
+                    memory_limit = read_cgroup_limit(path);
+                } else {
+                    char cpu_path[512];
+                    snprintf(cpu_path, sizeof(cpu_path), "%s/%s_%s", "/sys/fs/cgroup/cpu,cpuacct", cm_->rm->cgroup_path, info->id);
+                    if (access(cpu_path, F_OK) != 0) {
+                        snprintf(cpu_path, sizeof(cpu_path), "%s/%s_%s", "/sys/fs/cgroup/cpu", cm_->rm->cgroup_path, info->id);
+                    }
+                    
+                    snprintf(path, sizeof(path), "%s/cpu.cfs_quota_us", cpu_path);
+                    cpu_quota_us = read_cgroup_limit(path);
+                    snprintf(path, sizeof(path), "%s/cpu.cfs_period_us", cpu_path);
+                    unsigned long period = read_cgroup_limit(path);
+                    if (period > 0) {
+                        cpu_period_us = period;
+                    }
+                    
+                    snprintf(path, sizeof(path), "%s/%s_%s/memory.limit_in_bytes", "/sys/fs/cgroup/memory", cm_->rm->cgroup_path, info->id);
+                    memory_limit = read_cgroup_limit(path);
+                }
+                
+                if (cpu_quota_us > 0 && cpu_period_us > 0) {
+                    cpu_limit = cpu_quota_us;
+                    cpu_percent = 100.0 * ((double)cpu_quota_us / (double)cpu_period_us);
+                } else {
+                    cpu_percent = 0.0;
+                }
+                
+                if (memory_limit > 0) {
+                    memory_percent = 100.0 * ((double)memory_usage / (double)memory_limit);
+                }
             }
 
             const char* state_names[] = {"CREATED", "RUNNING", "STOPPED", "DESTROYED"};
@@ -165,13 +251,14 @@ std::string SimpleWebServer::getContainerListJSON() {
             json += "{";
             json += "\"id\":\"" + std::string(info->id) + "\",";
             json += "\"pid\":" + std::to_string(info->pid) + ",";
-            json += "\"state\":\"" + std::string(state_str) + "\",";
-            json += "\"created_at\":" + std::to_string(info->created_at) + ",";
-            json += "\"started_at\":" + std::to_string(info->started_at) + ",";
-            json += "\"stopped_at\":" + std::to_string(info->stopped_at);
+            json += "\"state\":\"" + std::string(state_str) + "\"";
             if (info->state == CONTAINER_RUNNING) {
-                json += ",\"cpu_usage\":" + std::to_string(cpu_usage) + ",";
-                json += "\"memory_usage\":" + std::to_string(memory_usage);
+                json += ",\"cpu_usage\":" + std::to_string(cpu_usage);
+                json += ",\"cpu_limit\":" + std::to_string(cpu_limit);
+                json += ",\"cpu_percent\":" + std::to_string(cpu_percent);
+                json += ",\"memory_usage\":" + std::to_string(memory_usage);
+                json += ",\"memory_limit\":" + std::to_string(memory_limit);
+                json += ",\"memory_percent\":" + std::to_string(memory_percent);
             }
             json += "}";
         }
@@ -277,6 +364,7 @@ std::string SimpleWebServer::getSystemInfoJSON() {
     
     std::string json = "{";
     json += "\"used_memory\":" + std::to_string(used_mem) + ",";
+    json += "\"total_memory\":" + std::to_string(total_mem) + ",";
     json += "\"cpu_percent\":" + std::to_string(cpu_percent);
     json += "}";
     return json;
@@ -288,60 +376,159 @@ std::string SimpleWebServer::generateHTML() {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>System Monitor</title>
+    <title>Container Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background: #f0f0f0; }
-        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f0f0f0; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h1 { color: #333; text-align: center; margin-bottom: 30px; }
-        .stat-box { margin: 20px 0; padding: 20px; background: #f8f8f8; border-radius: 8px; border-left: 4px solid #4CAF50; }
-        .stat-label { font-size: 14px; color: #666; margin-bottom: 8px; }
-        .stat-value { font-size: 32px; font-weight: bold; color: #333; }
-        .cpu { border-left-color: #2196F3; }
-        .ram { border-left-color: #FF9800; }
+        .container-section { margin-bottom: 40px; padding: 20px; background: #f8f8f8; border-radius: 8px; }
+        .container-title { font-size: 20px; font-weight: bold; margin-bottom: 20px; color: #333; text-align: center; }
+        .charts { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 30px; }
+        .chart-wrapper { text-align: center; }
+        .chart-container { width: 250px; height: 250px; position: relative; margin: 0 auto; }
+        .chart-title { text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #555; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>System Monitor</h1>
-        
-        <div class="stat-box cpu">
-            <div class="stat-label">CPU Usage</div>
-            <div class="stat-value" id="cpu-usage">0.0%</div>
-        </div>
-        
-        <div class="stat-box ram">
-            <div class="stat-label">RAM Usage</div>
-            <div class="stat-value" id="ram-usage">0 MB</div>
-        </div>
+        <h1>Container Monitor</h1>
+        <div id="containers-list"></div>
     </div>
 
     <script>
+        const charts = {};
+
         function formatBytes(bytes) {
             if (!bytes || bytes === 0) return '0 MB';
             const mb = bytes / (1024 * 1024);
             return mb.toFixed(2) + ' MB';
         }
 
-        function updateStats() {
-            fetch('/api/system')
+        function createChart(containerId, type, canvasId) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            const color = type === 'cpu' ? '#2196F3' : '#FF9800';
+            
+            return new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Used', 'Free'],
+                    datasets: [{
+                        data: [0, 100],
+                        backgroundColor: [color, '#E0E0E0'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.label + ': ' + context.parsed.toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateContainers() {
+            fetch('/api/containers')
                 .then(r => r.json())
                 .then(data => {
-                    if (data.cpu_percent !== undefined) {
-                        document.getElementById('cpu-usage').textContent = 
-                            parseFloat(data.cpu_percent).toFixed(1) + '%';
+                    const containersList = document.getElementById('containers-list');
+                    containersList.innerHTML = '';
+                    
+                    if (!data.containers || data.containers.length === 0) {
+                        containersList.innerHTML = '<p style="text-align: center; color: #666;">No active containers</p>';
+                        return;
                     }
-                    if (data.used_memory !== undefined) {
-                        document.getElementById('ram-usage').textContent = 
-                            formatBytes(parseInt(data.used_memory));
-                    }
+                    
+                    data.containers.forEach(container => {
+                        const containerDiv = document.createElement('div');
+                        containerDiv.className = 'container-section';
+                        containerDiv.id = 'container-' + container.id;
+                        
+                        const containerTitle = document.createElement('div');
+                        containerTitle.className = 'container-title';
+                        containerTitle.textContent = 'Container: ' + container.id;
+                        containerDiv.appendChild(containerTitle);
+                        
+                        const chartsDiv = document.createElement('div');
+                        chartsDiv.className = 'charts';
+                        
+                        const cpuWrapper = document.createElement('div');
+                        cpuWrapper.className = 'chart-wrapper';
+                        const cpuTitle = document.createElement('div');
+                        cpuTitle.className = 'chart-title';
+                        cpuTitle.textContent = 'CPU Usage';
+                        cpuWrapper.appendChild(cpuTitle);
+                        const cpuCanvas = document.createElement('canvas');
+                        cpuCanvas.id = 'cpu-' + container.id;
+                        const cpuContainer = document.createElement('div');
+                        cpuContainer.className = 'chart-container';
+                        cpuContainer.appendChild(cpuCanvas);
+                        cpuWrapper.appendChild(cpuContainer);
+                        chartsDiv.appendChild(cpuWrapper);
+                        
+                        const ramWrapper = document.createElement('div');
+                        ramWrapper.className = 'chart-wrapper';
+                        const ramTitle = document.createElement('div');
+                        ramTitle.className = 'chart-title';
+                        ramTitle.textContent = 'RAM Usage';
+                        ramWrapper.appendChild(ramTitle);
+                        const ramCanvas = document.createElement('canvas');
+                        ramCanvas.id = 'ram-' + container.id;
+                        const ramContainer = document.createElement('div');
+                        ramContainer.className = 'chart-container';
+                        ramContainer.appendChild(ramCanvas);
+                        ramWrapper.appendChild(ramContainer);
+                        chartsDiv.appendChild(ramWrapper);
+                        
+                        containerDiv.appendChild(chartsDiv);
+                        containersList.appendChild(containerDiv);
+                        
+                        if (!charts['cpu-' + container.id]) {
+                            charts['cpu-' + container.id] = createChart(container.id, 'cpu', 'cpu-' + container.id);
+                        }
+                        if (!charts['ram-' + container.id]) {
+                            charts['ram-' + container.id] = createChart(container.id, 'ram', 'ram-' + container.id);
+                        }
+                        
+                        if (container.state === 'RUNNING') {
+                            if (container.cpu_percent !== undefined) {
+                                const cpuPercent = Math.min(100, Math.max(0, parseFloat(container.cpu_percent)));
+                                charts['cpu-' + container.id].data.datasets[0].data = [cpuPercent, 100 - cpuPercent];
+                                charts['cpu-' + container.id].update('none');
+                            }
+                            
+                            if (container.memory_percent !== undefined) {
+                                const memPercent = Math.min(100, Math.max(0, parseFloat(container.memory_percent)));
+                                charts['ram-' + container.id].data.datasets[0].data = [memPercent, 100 - memPercent];
+                                charts['ram-' + container.id].update('none');
+                            }
+                        } else {
+                            charts['cpu-' + container.id].data.datasets[0].data = [0, 100];
+                            charts['cpu-' + container.id].update('none');
+                            charts['ram-' + container.id].data.datasets[0].data = [0, 100];
+                            charts['ram-' + container.id].update('none');
+                        }
+                    });
                 })
                 .catch(error => {
                     console.error('Error:', error);
                 });
         }
 
-        updateStats();
-        setInterval(updateStats, 1000);
+        updateContainers();
+        setInterval(updateContainers, 1000);
     </script>
 </body>
 </html>
