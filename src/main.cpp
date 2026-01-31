@@ -229,10 +229,10 @@ static int handle_list(int argc, char *argv[])
     int count;
     container_info_t **containers = container_manager_list(&cm, &count);
 
-    // Filter out destroyed containers
+    // Filter out destroyed and stopped containers
     vector<container_info_t*> active_containers;
     for (int i = 0; i < count; i++) {
-        if (containers[i]->state != CONTAINER_DESTROYED) {
+        if (containers[i]->state != CONTAINER_DESTROYED && containers[i]->state != CONTAINER_STOPPED) {
             active_containers.push_back(containers[i]);
         }
     }
@@ -413,10 +413,10 @@ void display_compact_monitor() {
     int count;
     container_info_t **containers = container_manager_list(&cm, &count);
     
-    // Filter out destroyed containers
+    // Filter out destroyed and stopped containers
     vector<container_info_t*> active_containers;
     for (int i = 0; i < count; i++) {
-        if (containers[i]->state != CONTAINER_DESTROYED) {
+        if (containers[i]->state != CONTAINER_DESTROYED && containers[i]->state != CONTAINER_STOPPED) {
             active_containers.push_back(containers[i]);
         }
     }
@@ -540,15 +540,15 @@ void display_monitor() {
         int count;
         container_info_t **containers = container_manager_list(&cm, &count);
         
-        // Filter out destroyed containers
-        vector<container_info_t*> active_containers;
-        for (int i = 0; i < count; i++) {
-            if (containers[i]->state != CONTAINER_DESTROYED) {
-                active_containers.push_back(containers[i]);
-            }
+    // Filter out destroyed and stopped containers
+    vector<container_info_t*> active_containers;
+    for (int i = 0; i < count; i++) {
+        if (containers[i]->state != CONTAINER_DESTROYED && containers[i]->state != CONTAINER_STOPPED) {
+            active_containers.push_back(containers[i]);
         }
-        
-        int running_count = 0;
+    }
+    
+    int running_count = 0;
         for (size_t i = 0; i < active_containers.size(); i++) {
             if (active_containers[i]->state == CONTAINER_RUNNING) {
                 running_count++;
@@ -1615,15 +1615,9 @@ void interactive_menu() {
                                                 char* argv[] = {cmd_stop, start, nullptr};
                                                 handle_stop(2, argv);
                                             } else if (info->state == CONTAINER_STOPPED) {
-                                                if (container_manager_start(&cm, start) == 0) {
-                                                    set_color(COLOR_GREEN);
-                                                    printf("Container %s started\n", start);
-                                                    reset_color();
-                                                } else {
-                                                    set_color(COLOR_RED);
-                                                    printf("Failed to start container %s\n", start);
-                                                    reset_color();
-                                                }
+                                                set_color(COLOR_YELLOW);
+                                                printf("Note: Cannot restart stopped containers. Please create a new container.\n");
+                                                reset_color();
                                             }
                                         }
                                     }

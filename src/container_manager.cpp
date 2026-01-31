@@ -223,10 +223,31 @@ static int load_state(container_manager_t *cm) {
                     state = CONTAINER_STOPPED;
                     stopped_at = time(nullptr);
                 }
-                if (state != CONTAINER_DESTROYED) {
+                // Only load containers that are not destroyed and not stopped
+                if (state != CONTAINER_DESTROYED && state != CONTAINER_STOPPED) {
                     container_info_t *info = static_cast<container_info_t*>(calloc(1, sizeof(container_info_t)));
                     if (info) {
-                        info->id = strdup(container_id);
+                        // Convert non-numeric container IDs to numeric IDs starting from 1
+                        int num_id = extract_numeric_id(container_id);
+                        if (num_id < 0) {
+                            // Non-numeric ID - convert to numeric
+                            int max_id = 0;
+                            for (int i = 0; i < cm->container_count; i++) {
+                                int existing_num_id = extract_numeric_id(cm->containers[i]->id);
+                                if (existing_num_id > max_id) {
+                                    max_id = existing_num_id;
+                                }
+                            }
+                            num_id = max_id + 1;
+                            char new_id[64];
+                            snprintf(new_id, sizeof(new_id), "%d", num_id);
+                            info->id = strdup(new_id);
+                            // Note: Old cgroup with old ID will remain but won't be used
+                            // The container will use the new numeric ID going forward
+                        } else {
+                            // Already numeric ID
+                            info->id = strdup(container_id);
+                        }
                         info->pid = pid;
                         info->state = static_cast<container_state_t>(state);
                         info->created_at = created_at;
@@ -288,6 +309,8 @@ int container_manager_init(container_manager_t *cm, int max_containers) {
     int loaded = load_state(cm);
     if (loaded > 0) {
         fprintf(stderr, "Loaded %d container(s) from state file\n", loaded);
+        // Save state again to update any converted container IDs
+        save_state(cm);
     }
 
     return 0;
@@ -365,12 +388,18 @@ int container_manager_start(container_manager_t *cm, const char *container_id) {
         return -1;
     }
 
-    if (info->state != CONTAINER_CREATED) {
-        fprintf(stderr, "Error: container %s is not in CREATED state\n", container_id);
+    if (info->state == CONTAINER_RUNNING) {
+        fprintf(stderr, "Error: container %s is already running\n", container_id);
         return -1;
     }
 
-    fprintf(stderr, "Error: container start requires config (limitation of current implementation)\n");
+    if (info->state == CONTAINER_DESTROYED) {
+        fprintf(stderr, "Error: container %s has been destroyed\n", container_id);
+        return -1;
+    }
+
+    // Cannot restart stopped containers without original config
+    fprintf(stderr, "Error: Cannot restart stopped container %s. Please create a new container with the same configuration.\n", container_id);
     return -1;
 }
 
@@ -386,7 +415,7 @@ int container_manager_stop(container_manager_t *cm, const char *container_id) {
         return -1;
     }
 
-    kill_process_tree(info->pid);
+    // First, try to kill all processes in the cgroup
     char cgroup_procs_path[512];
     if (cm->rm->version == CGROUP_V2) {
         snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
@@ -400,17 +429,20 @@ int container_manager_stop(container_manager_t *cm, const char *container_id) {
     if (fp) {
         pid_t pid;
         while (fscanf(fp, "%d", &pid) == 1) {
-            if (pid > 0 && pid != info->pid) {
+            if (pid > 0) {
                 kill_process_tree(pid);
             }
         }
         fclose(fp);
     }
+    
+    // Also kill the main process
+    kill_process_tree(info->pid);
 
     // Wait for process to terminate
     int status;
     int waited = 0;
-    for (int i = 0; i < 10; i++) { // Try up to 1 second
+    for (int i = 0; i < 50; i++) { // Try up to 5 seconds
         if (waitpid(info->pid, &status, WNOHANG) == info->pid) {
             waited = 1;
             break;
@@ -419,9 +451,12 @@ int container_manager_stop(container_manager_t *cm, const char *container_id) {
     }
     
     // If still not terminated, force kill
-    if (!waited && kill(info->pid, 0) == 0) {
-        kill(info->pid, SIGKILL);
-        waitpid(info->pid, &status, 0);
+    if (!waited) {
+        if (kill(info->pid, 0) == 0) {
+            kill(info->pid, SIGKILL);
+            usleep(200000); // Wait 200ms
+            waitpid(info->pid, &status, WNOHANG);
+        }
     }
 
     info->state = CONTAINER_STOPPED;

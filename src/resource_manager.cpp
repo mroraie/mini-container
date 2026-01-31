@@ -110,13 +110,23 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
                          const cpu_limits_t *limits) {
     char path[BUF_SIZE];
     char value[64];
+    int quota_us = limits->quota_us;
+    int period_us = limits->period_us > 0 ? limits->period_us : 100000;
+
+    // If quota is not set but shares is set, convert shares to quota
+    // shares of 1024 = 1 full CPU core, so shares/1024 gives us the fraction
+    if (quota_us <= 0 && limits->shares > 0) {
+        // Convert shares to quota: shares/1024 * period_us
+        // Example: shares=256 means 256/1024 = 0.25 of a core
+        quota_us = (limits->shares * period_us) / 1024;
+        if (quota_us < 1000) quota_us = 1000; // Minimum 1ms
+    }
 
     if (rm->version == CGROUP_V2) {
         // cgroup2 uses cpu.max format: "quota period" or "max" for unlimited
-        if (limits->quota_us > 0) {
-            int period_us = limits->period_us > 0 ? limits->period_us : 100000;
+        if (quota_us > 0) {
             snprintf(path, sizeof(path), "%s/%s_%s/cpu.max", CGROUP_ROOT, rm->cgroup_path, container_id);
-            snprintf(value, sizeof(value), "%d %d", limits->quota_us, period_us);
+            snprintf(value, sizeof(value), "%d %d", quota_us, period_us);
             if (write_file(path, value, rm) != 0) {
                 return -1;
             }
@@ -124,18 +134,6 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
             // Unlimited CPU
             snprintf(path, sizeof(path), "%s/%s_%s/cpu.max", CGROUP_ROOT, rm->cgroup_path, container_id);
             if (write_file(path, "max", rm) != 0) {
-                return -1;
-            }
-        }
-        // Note: cpu.weight (similar to shares) can be set, but we'll focus on quota for now
-        if (limits->shares > 0) {
-            // Convert shares to weight (cgroup2 uses weight, typically 1-10000)
-            int weight = (limits->shares * 100) / 1024;
-            if (weight < 1) weight = 1;
-            if (weight > 10000) weight = 10000;
-            snprintf(path, sizeof(path), "%s/%s_%s/cpu.weight", CGROUP_ROOT, rm->cgroup_path, container_id);
-            snprintf(value, sizeof(value), "%d", weight);
-            if (write_file(path, value, rm) != 0) {
                 return -1;
             }
         }
@@ -149,23 +147,13 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
             snprintf(cpu_path, sizeof(cpu_path), "%s/%s_%s", CPU_CGROUP_PATH, rm->cgroup_path, container_id);
         }
         
-        if (limits->shares > 0) {
-            int ret = snprintf(path, sizeof(path), "%s/cpu.shares", cpu_path);
-            if (ret < 0 || (size_t)ret >= sizeof(path)) {
-                return -1;
-            }
-            snprintf(value, sizeof(value), "%d", limits->shares);
-            if (write_file(path, value, rm) != 0) {
-                return -1;
-            }
-        }
-
-        if (limits->quota_us > 0) {
+        // Set quota and period for absolute CPU limit
+        if (quota_us > 0) {
             int ret = snprintf(path, sizeof(path), "%s/cpu.cfs_quota_us", cpu_path);
             if (ret < 0 || (size_t)ret >= sizeof(path)) {
                 return -1;
             }
-            snprintf(value, sizeof(value), "%d", limits->quota_us);
+            snprintf(value, sizeof(value), "%d", quota_us);
             if (write_file(path, value, rm) != 0) {
                 return -1;
             }
@@ -174,7 +162,19 @@ static int set_cpu_limits(resource_manager_t *rm, const char *container_id,
             if (ret < 0 || (size_t)ret >= sizeof(path)) {
                 return -1;
             }
-            snprintf(value, sizeof(value), "%d", limits->period_us > 0 ? limits->period_us : 100000);
+            snprintf(value, sizeof(value), "%d", period_us);
+            if (write_file(path, value, rm) != 0) {
+                return -1;
+            }
+        }
+        
+        // Also set shares for relative CPU weight (optional, for fairness)
+        if (limits->shares > 0) {
+            int ret = snprintf(path, sizeof(path), "%s/cpu.shares", cpu_path);
+            if (ret < 0 || (size_t)ret >= sizeof(path)) {
+                return -1;
+            }
+            snprintf(value, sizeof(value), "%d", limits->shares);
             if (write_file(path, value, rm) != 0) {
                 return -1;
             }
