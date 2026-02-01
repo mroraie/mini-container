@@ -79,6 +79,7 @@ static int add_container(container_manager_t *cm, container_info_t *info) {
 static void remove_container(container_manager_t *cm, const char *container_id) {
     for (int i = 0; i < cm->container_count; i++) {
         if (strcmp(cm->containers[i]->id, container_id) == 0) {
+            free_container_config(cm->containers[i]->saved_config);
             free(cm->containers[i]->id);
             free(cm->containers[i]);
             for (int j = i; j < cm->container_count - 1; j++) {
@@ -96,6 +97,102 @@ static int is_pid_alive(pid_t pid) {
         return 1;
     }
     return (errno == ESRCH) ? 0 : 1;
+}
+
+// کپی کردن container_config_t
+static container_config_t* copy_container_config(const container_config_t *src) {
+    if (!src) return nullptr;
+    
+    container_config_t *dst = static_cast<container_config_t*>(calloc(1, sizeof(container_config_t)));
+    if (!dst) {
+        return nullptr;
+    }
+    
+    // کپی id
+    if (src->id) {
+        dst->id = strdup(src->id);
+        if (!dst->id) {
+            free(dst);
+            return nullptr;
+        }
+    }
+    
+    // کپی root_path (اگر وجود داشته باشد)
+    if (src->root_path) {
+        dst->root_path = strdup(src->root_path);
+        if (!dst->root_path) {
+            free_container_config(dst);
+            return nullptr;
+        }
+    }
+    
+    // کپی namespace config
+    dst->ns_config = src->ns_config;
+    
+    // کپی resource limits
+    dst->res_limits = src->res_limits;
+    
+    // کپی filesystem config
+    dst->fs_config = src->fs_config;
+    if (src->fs_config.root_path) {
+        dst->fs_config.root_path = strdup(src->fs_config.root_path);
+        if (!dst->fs_config.root_path) {
+            free_container_config(dst);
+            return nullptr;
+        }
+    }
+    
+    // کپی command
+    if (src->command && src->command_argc > 0) {
+        dst->command_argc = src->command_argc;
+        dst->command = static_cast<char**>(calloc(src->command_argc + 1, sizeof(char*)));
+        if (!dst->command) {
+            // اگر allocation fail کرد، باید cleanup کنیم
+            free_container_config(dst);
+            return nullptr;
+        }
+        for (int i = 0; i < src->command_argc; i++) {
+            if (src->command[i]) {
+                dst->command[i] = strdup(src->command[i]);
+                if (!dst->command[i]) {
+                    // اگر strdup fail کرد، باید cleanup کنیم
+                    for (int j = 0; j < i; j++) {
+                        free(dst->command[j]);
+                    }
+                    free(dst->command);
+                    free_container_config(dst);
+                    return nullptr;
+                }
+            } else {
+                dst->command[i] = nullptr;
+            }
+        }
+        dst->command[src->command_argc] = nullptr;
+    } else {
+        dst->command = nullptr;
+        dst->command_argc = 0;
+    }
+    
+    return dst;
+}
+
+// آزاد کردن container_config_t
+static void free_container_config(container_config_t *config) {
+    if (!config) return;
+    
+    if (config->id) free(config->id);
+    if (config->root_path) free(config->root_path);
+    if (config->fs_config.root_path) free(config->fs_config.root_path);
+    
+    if (config->command) {
+        // استفاده از command_argc برای اطمینان از آزاد کردن همه عناصر
+        for (int i = 0; i < config->command_argc && config->command[i]; i++) {
+            free(config->command[i]);
+        }
+        free(config->command);
+    }
+    
+    free(config);
 }
 
 static void kill_process_tree(pid_t pid) {
@@ -247,6 +344,7 @@ static int load_state(container_manager_t *cm) {
                         info->created_at = created_at;
                         info->started_at = started_at;
                         info->stopped_at = stopped_at;
+                        info->saved_config = nullptr;  // کانتینرهای لود شده config ندارند
                         
                         if (add_container(cm, info) == 0) {
                             loaded++;
@@ -339,9 +437,19 @@ int container_manager_create(container_manager_t *cm,
     info->state = CONTAINER_CREATED;
     info->created_at = time(nullptr);
     info->pid = 0;
+    info->saved_config = copy_container_config(config);  // ذخیره config
+    
+    // بررسی اینکه config با موفقیت کپی شده است
+    if (!info->saved_config) {
+        fprintf(stderr, "Failed to copy container configuration\n");
+        free(info->id);
+        free(info);
+        return -1;
+    }
 
     if (resource_manager_create_cgroup(cm->rm, container_id, &config->res_limits) != 0) {
         fprintf(stderr, "Failed to create resource cgroups\n");
+        free_container_config(info->saved_config);
         free(info->id);
         free(info);
         return -1;
@@ -351,6 +459,7 @@ int container_manager_create(container_manager_t *cm,
         if (fs_create_minimal_root(config->fs_config.root_path) != 0) {
             fprintf(stderr, "Failed to create minimal root filesystem\n");
             resource_manager_destroy_cgroup(cm->rm, container_id);
+            free_container_config(info->saved_config);
             free(info->id);
             free(info);
             return -1;
@@ -363,6 +472,7 @@ int container_manager_create(container_manager_t *cm,
 
     if (add_container(cm, info) != 0) {
         resource_manager_destroy_cgroup(cm->rm, container_id);
+        free_container_config(info->saved_config);
         free(info->id);
         free(info);
         return -1;
@@ -391,8 +501,66 @@ int container_manager_start(container_manager_t *cm, const char *container_id) {
         return -1;
     }
 
-    fprintf(stderr, "Error: Cannot restart stopped container %s. Please create a new container with the same configuration.\n", container_id);
-    return -1;
+    // پشتیبانی از CONTAINER_CREATED و CONTAINER_STOPPED
+    if (info->state != CONTAINER_CREATED && info->state != CONTAINER_STOPPED) {
+        fprintf(stderr, "Error: container %s is in invalid state for starting\n", container_id);
+        return -1;
+    }
+
+    // بررسی اینکه config ذخیره شده است
+    if (!info->saved_config) {
+        fprintf(stderr, "Error: Cannot restart container %s - configuration not saved. This container was created before the restart feature was added.\n", container_id);
+        return -1;
+    }
+
+    // استفاده از config ذخیره شده برای restart
+    container_config_t *config = info->saved_config;
+    
+    // اطمینان از اینکه cgroup وجود دارد
+    // resource_manager_create_cgroup خودش بررسی می‌کند که آیا cgroup وجود دارد یا نه (errno != EEXIST)
+    // پس اگر از قبل وجود داشته باشد، خطا نمی‌دهد و فقط limits را به‌روزرسانی می‌کند
+    if (resource_manager_create_cgroup(cm->rm, container_id, &config->res_limits) != 0) {
+        fprintf(stderr, "Error: Failed to create/recreate resource cgroups for container %s\n", container_id);
+        return -1;
+    }
+
+    // ایجاد callback برای اضافه کردن به cgroup
+    struct cgroup_callback_data {
+        resource_manager_t *rm;
+        const char *container_id;
+    };
+    
+    cgroup_callback_data callback_data = {
+        .rm = cm->rm,
+        .container_id = container_id
+    };
+    
+    auto add_to_cgroup = [](pid_t pid, void *user_data) -> void {
+        cgroup_callback_data *data = static_cast<cgroup_callback_data*>(user_data);
+        resource_manager_add_process(data->rm, data->container_id, pid);
+    };
+
+    // اجرای کانتینر با همان config قبلی
+    pid_t pid = namespace_create_container_with_cgroup(&config->ns_config,
+                                                      config->command,
+                                                      config->command_argc,
+                                                      add_to_cgroup,
+                                                      &callback_data);
+
+    if (pid == -1) {
+        fprintf(stderr, "Error: Failed to start container %s\n", container_id);
+        return -1;
+    }
+
+    // به‌روزرسانی اطلاعات کانتینر
+    info->pid = pid;
+    info->state = CONTAINER_RUNNING;
+    info->started_at = time(nullptr);
+    info->stopped_at = 0;
+
+    save_state(cm);
+
+    return 0;
 }
 
 int container_manager_stop(container_manager_t *cm, const char *container_id) {
@@ -579,6 +747,7 @@ void container_manager_cleanup(container_manager_t *cm) {
         
         for (int i = 0; i < cm->container_count; i++) {
             if (cm->containers[i]) {
+                free_container_config(cm->containers[i]->saved_config);
                 free(cm->containers[i]->id);
                 free(cm->containers[i]);
             }

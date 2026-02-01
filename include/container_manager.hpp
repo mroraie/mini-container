@@ -30,6 +30,7 @@ typedef struct {
     time_t created_at;
     time_t started_at;
     time_t stopped_at;
+    container_config_t *saved_config;  // ذخیره config برای restart
 } container_info_t;
 
 typedef struct container_manager {

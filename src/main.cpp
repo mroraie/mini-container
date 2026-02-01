@@ -73,6 +73,7 @@ static void print_usage(const char *program_name)
     printf("Usage: %s <command> [options] [arguments]\n\n", program_name);
     printf("Commands:\n");
     printf("  run <command> [args...]    Run a command in a new container\n");
+    printf("  start <container_id>       Start a stopped container\n");
     printf("  stop <container_id>        Stop a running container\n");
     printf("  list                       List all containers\n");
     printf("  exec <container_id> <cmd>  Execute command in running container\n");
@@ -199,6 +200,26 @@ static int handle_run(int argc, char *argv[])
     free(config.id);
     free(config.fs_config.root_path);
 
+    return EXIT_SUCCESS;
+}
+
+static int handle_start(int argc, char *argv[])
+{
+    if (argc < 2)
+    {
+        fprintf(stderr, "Error: container ID required\n");
+        return EXIT_FAILURE;
+    }
+
+    const char *container_id = argv[1];
+
+    if (container_manager_start(&cm, container_id) != 0)
+    {
+        fprintf(stderr, "Failed to start container %s\n", container_id);
+        return EXIT_FAILURE;
+    }
+
+    printf("Container %s started\n", container_id);
     return EXIT_SUCCESS;
 }
 
@@ -450,7 +471,8 @@ void display_compact_monitor() {
     reset_color();
     
     set_color(COLOR_CYAN);
-    printf("Total RAM: %s  ", format_bytes(total_memory_bytes).c_str());
+    string ram_str = format_bytes(total_memory_bytes);
+    printf("Total RAM: %s  ", ram_str.c_str());
     reset_color();
     
     time_t now = time(nullptr);
@@ -459,7 +481,7 @@ void display_compact_monitor() {
     printf("Time: %s\n", time_str);
     
     set_color(COLOR_BOLD);
-    printf("%-20s %-8s %-10s %-12s %-12s %-10s\n",
+    printf("%-20s %-8s %-10s %-13s %-12s %-10s\n",
            "CONTAINER ID", "PID", "STATE", "CPU%", "MEMORY", "RUNTIME");
     reset_color();
     
@@ -505,9 +527,11 @@ void display_compact_monitor() {
                 double cpu_percent = calculate_cpu_percent(cpu_usage, info->started_at);
                 string mem_str = format_bytes(memory_usage);
                 
-                printf(" %-12.1f %-12s", cpu_percent, mem_str.c_str());
+                char cpu_buf[16];
+                snprintf(cpu_buf, sizeof(cpu_buf), "%.1f%%", cpu_percent);
+                printf(" %-13s %-12s", cpu_buf, mem_str.c_str());
             } else {
-                printf(" %-12s %-12s", "--", "--");
+                printf(" %-13s %-12s", "--", "--");
             }
             
             string runtime = format_duration(info->started_at, now);
@@ -1427,7 +1451,7 @@ void interactive_menu() {
         reset_color();
         printf("1. Create Container         2. Full Monitor (htop)     3. List Containers\n");
         printf("4. Stop Container           5. Destroy Container        6. Container Info\n");
-        printf("7. Edit Container           0. Exit\n");
+        printf("7. Edit Container           8. Start Container          0. Exit\n");
         printf("\n");
         set_color(COLOR_YELLOW);
         printf("Select option (auto-refresh every 5 seconds): ");
@@ -1623,15 +1647,55 @@ void interactive_menu() {
                                                 char* argv[] = {cmd_stop, start, nullptr};
                                                 handle_stop(2, argv);
                                             } else if (info->state == CONTAINER_STOPPED) {
-                                                set_color(COLOR_YELLOW);
-                                                printf("Note: Cannot restart stopped containers. Please create a new container.\n");
-                                                reset_color();
+                                                char cmd_start[] = "start";
+                                                char* argv[] = {cmd_start, start, nullptr};
+                                                handle_start(2, argv);
                                             }
                                         }
                                     }
                                 } else {
                                     set_color(COLOR_RED);
                                     printf("Container %s not found\n", start);
+                                    reset_color();
+                                    printf("\nAvailable containers:\n");
+                                    handle_list(0, nullptr);
+                                }
+                            } else {
+                                printf("Error: Container ID cannot be empty\n");
+                            }
+                            printf("\nPress Enter to continue...");
+                            fflush(stdout);
+                            int c;
+                            while ((c = getchar()) != '\n' && c != EOF);
+                        }
+                        break;
+                    }
+                    case 8: {
+                        clear_screen();
+                        printf("Container ID: ");
+                        fflush(stdout);
+                        char id[256];
+                        if (fgets(id, sizeof(id), stdin)) {
+                            size_t len = strlen(id);
+                            if (len > 0 && id[len-1] == '\n') {
+                                id[len-1] = '\0';
+                            }
+                            
+                            char *start = id;
+                            while (*start == ' ' || *start == '\t') start++;
+                            char *end = id + strlen(id) - 1;
+                            while (end > start && (*end == ' ' || *end == '\t')) end--;
+                            *(end + 1) = '\0';
+                            
+                            if (strlen(start) > 0) {
+                                container_info_t *info = container_manager_get_info(&cm, start);
+                                if (info) {
+                                    char cmd_start[] = "start";
+                                    char* argv[] = {cmd_start, start, nullptr};
+                                    handle_start(2, argv);
+                                } else {
+                                    set_color(COLOR_RED);
+                                    printf("Error: Container %s not found\n", start);
                                     reset_color();
                                     printf("\nAvailable containers:\n");
                                     handle_list(0, nullptr);
@@ -1719,6 +1783,10 @@ int main(int argc, char *argv[])
     if (strcmp(command, "run") == 0)
     {
         result = handle_run(argc - 1, &argv[1]);
+    }
+    else if (strcmp(command, "start") == 0)
+    {
+        result = handle_start(argc - 1, &argv[1]);
     }
     else if (strcmp(command, "stop") == 0)
     {
