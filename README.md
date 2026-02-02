@@ -13,6 +13,7 @@
 در ادامه، توضیحات کلی پروژه ارائه شده است. برای مشاهده‌ی **ریزجزئیات و نحوه‌ی پیاده‌سازی**، پیشنهاد می‌شود موارد زیر مطالعه شود:
 	- [مستندات API](docs/api.md)
 	- [گزارش فنی](docs/technical_report.md)
+	- [[فایل پروژه در Github]] https://github.com/mroraie/mini-container
 
 <div style="page-break-after: always;"></div>
 

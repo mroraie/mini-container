@@ -44,6 +44,9 @@ container_info_t *container_manager_get_info(container_manager_t *cm, const char
 
 دستورات را در کانتینرها اجرا کرده و اطلاعات کانتینر را دریافت کنید.
 
+<div style="page-break-after: always;"></div>
+
+
 ## مدیریت namespace ها 
 
 ### پیکربندی
@@ -96,6 +99,8 @@ int resource_manager_destroy_cgroup(resource_manager_t *rm, const char *containe
 ```
 
 گروه‌های کنترل را برای کنترل منابع مدیریت کنید.
+
+<div style="page-break-after: always;"></div>
 
 ### آمار
 
@@ -153,6 +158,8 @@ typedef struct {
 
 پیکربندی کانتینر شامل تمام تنظیمات ایزولاسیون.
 
+<div style="page-break-after: always;"></div>
+
 ### محدودیت‌های منابع
 
 ```c++
@@ -197,6 +204,8 @@ typedef struct {
 - `stopped_at`: زمان توقف کانتینر (0 اگر متوقف نشده باشد)
 - `saved_config`: پیکربندی ذخیره شده برای امکان restart کانتینر
 
+<div style="page-break-after: always;"></div>
+
 ## مقدار دهی ها و کلاس بندی ها
 
 ### مدیریت Namespace
@@ -231,6 +240,8 @@ typedef enum {
 ```
 
 **نکته:** `FS_PIVOT_ROOT` روش پیشنهادی و استاندارد برای ایزولاسیون فایل‌سیستم است که امنیت و انعطاف‌پذیری بیشتری نسبت به روش‌های قدیمی‌تر دارد.
+
+<div style="page-break-after: always;"></div>
 
 ## API وب سرور (Web Server API)
 
@@ -308,6 +319,8 @@ public:
 - `total_memory`: کل حافظه سیستم (بایت)
 - `cpu_percent`: درصد استفاده CPU سیستم
 
+<div style="page-break-after: always;"></div>
+
 ## مدیریت Signal و Graceful Shutdown
 
 سیستم از signal handler برای graceful shutdown استفاده می‌کند.
@@ -331,6 +344,8 @@ void signal_handler(int signum);
 6. state نهایی را ذخیره می‌کند
 7. وب سرور را متوقف می‌کند
 8. منابع را آزاد می‌کند و برنامه را می‌بندد
+
+<div style="page-break-after: always;"></div>
 
 ## توابع کمکی برای تست
 
@@ -359,6 +374,8 @@ static int get_cpu_count();
 
 - `get_total_system_memory()`: کل مموری سیستم را به بایت برمی‌گرداند
 - `get_cpu_count()`: تعداد CPU cores را برمی‌گرداند
+
+<div style="page-break-after: always;"></div>
 
 ## مثال‌های استفاده
 
@@ -405,23 +422,12 @@ if (info) {
 ### توقف و راه‌اندازی مجدد کانتینر
 
 ```c++
-// توقف کانتینر
 if (container_manager_stop(&cm, "my_container") == 0) {
     printf("Container stopped\n");
 }
 
-// راه‌اندازی مجدد
 if (container_manager_start(&cm, "my_container") == 0) {
     printf("Container restarted\n");
 }
 ```
-
-## نکات مهم
-
-1. **مدیریت حافظه**: تمام رشته‌های تخصیص داده شده با `strdup` باید با `free` آزاد شوند
-2. **State Management**: کانتینرها باید به ترتیب صحیح state تغییر کنند (CREATED → RUNNING → STOPPED → DESTROYED)
-3. **Privileges**: اکثر عملیات نیاز به root privileges دارند
-4. **Cgroup Version**: سیستم از Cgroup v1 و v2 پشتیبانی می‌کند و به صورت خودکار تشخیص می‌دهد
-5. **Graceful Shutdown**: با Ctrl+C همه کانتینرها به صورت graceful stop می‌شوند و state ذخیره می‌شود
-
 
