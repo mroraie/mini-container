@@ -11,11 +11,8 @@
 #include <sys/wait.h>
 #include <memory>
 #include "../include/namespace_handler.hpp"
-
 using namespace std;
-
 #define CHILD_STACK_SIZE (8 * 1024 * 1024)
-
 typedef struct {
     namespace_config_t *config;
     char **command;
@@ -23,26 +20,20 @@ typedef struct {
     void (*add_to_cgroup_callback)(pid_t pid, void *user_data);
     void *cgroup_user_data;
 } clone_args_t;
-
 void namespace_config_init(namespace_config_t *config) {
     if (!config) return;
-
     config->flags = CONTAINER_NAMESPACES;
 }
-
 static int setup_container_filesystem(const namespace_config_t *config) {
-    (void)config;  
-
+    (void)config;
     if (mount(nullptr, "/", nullptr, MS_REC | MS_PRIVATE, nullptr) == -1) {
         perror("mount propagation private failed");
         return -1;
     }
-
     auto mount_or_ignore_ebusy = [](const char *source, const char *target,
                                     const char *fstype, unsigned long flags) {
         if (mount(source, target, fstype, flags, nullptr) == -1) {
             if (errno == EBUSY) {
-                
                 return 0;
             }
             perror("mount failed");
@@ -50,70 +41,55 @@ static int setup_container_filesystem(const namespace_config_t *config) {
         }
         return 0;
     };
-
     if (mount_or_ignore_ebusy("proc", "/proc", "proc", 0) == -1) {
         fprintf(stderr, "mount proc failed\n");
         return -1;
     }
-
     if (mount_or_ignore_ebusy("sysfs", "/sys", "sysfs",
                               MS_NOSUID | MS_NOEXEC | MS_NODEV) == -1) {
         fprintf(stderr, "mount sysfs failed\n");
         return -1;
     }
-
     if (mount_or_ignore_ebusy("tmpfs", "/tmp", "tmpfs", 0) == -1) {
         fprintf(stderr, "mount tmpfs failed\n");
         return -1;
     }
-
     if (mount_or_ignore_ebusy("dev", "/dev", "devtmpfs", 0) == -1) {
         fprintf(stderr, "mount devtmpfs failed\n");
         return -1;
     }
-
     return 0;
 }
-
 static int container_child(void *arg) {
     clone_args_t *args = static_cast<clone_args_t*>(arg);
-    
     if (namespace_setup_isolation(args->config) != 0) {
         fprintf(stderr, "Failed to setup namespace isolation\n");
         exit(EXIT_FAILURE);
     }
-
     execvp(args->command[0], args->command);
     perror("execvp failed");
     exit(EXIT_FAILURE);
 }
-
 pid_t namespace_clone_process(int flags, void *child_stack, int stack_size,
                              int (*child_func)(void *), void *arg) {
     pid_t pid = clone(child_func, static_cast<char*>(child_stack) + stack_size,
                      flags | SIGCHLD, arg);
-
     if (pid == -1) {
         perror("clone failed");
         return -1;
     }
-
     return pid;
 }
-
 int namespace_setup_isolation(const namespace_config_t *config) {
     if (setup_container_filesystem(config) != 0) {
         return -1;
     }
-
     return 0;
 }
-
 pid_t namespace_create_container(const namespace_config_t *config,
                                char **command, int argc) {
     return namespace_create_container_with_cgroup(config, command, argc, nullptr, nullptr);
 }
-
 pid_t namespace_create_container_with_cgroup(const namespace_config_t *config,
                                             char **command, int argc,
                                             void (*add_to_cgroup_callback)(pid_t pid, void *user_data),
@@ -122,13 +98,11 @@ pid_t namespace_create_container_with_cgroup(const namespace_config_t *config,
         fprintf(stderr, "Error: invalid parameters\n");
         return -1;
     }
-
     std::unique_ptr<char[]> child_stack(new char[CHILD_STACK_SIZE]);
     if (!child_stack) {
         perror("malloc child stack failed");
         return -1;
     }
-
     clone_args_t args = {
         .config = const_cast<namespace_config_t*>(config),
         .command = command,
@@ -136,41 +110,31 @@ pid_t namespace_create_container_with_cgroup(const namespace_config_t *config,
         .add_to_cgroup_callback = add_to_cgroup_callback,
         .cgroup_user_data = cgroup_user_data
     };
-
     int flags = config->flags;
-
     pid_t pid = namespace_clone_process(flags, child_stack.get(), CHILD_STACK_SIZE,
                                       container_child, &args);
-    
     if (pid > 0 && add_to_cgroup_callback) {
-        
-        usleep(1000); 
+        usleep(1000);
         add_to_cgroup_callback(pid, cgroup_user_data);
     }
-
     return pid;
 }
-
 int namespace_join(pid_t target_pid, int ns_type) {
     char ns_path[256];
     int fd;
-
     snprintf(ns_path, sizeof(ns_path), "/proc/%d/ns/%s", target_pid,
              ns_type == CLONE_NEWPID ? "pid" :
              ns_type == CLONE_NEWNS ? "mnt" : "unknown");
-
     fd = open(ns_path, O_RDONLY);
     if (fd == -1) {
         perror("open namespace file failed");
         return -1;
     }
-
     if (setns(fd, ns_type) == -1) {
         perror("setns failed");
         close(fd);
         return -1;
     }
-
     close(fd);
     return 0;
 }

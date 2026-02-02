@@ -12,74 +12,58 @@
 #include <cstdlib>
 #include <map>
 #include <string>
-
 SimpleWebServer::SimpleWebServer(container_manager_t* cm, int port)
     : cm_(cm), port_(port), running_(false), server_socket_(-1) {
 }
-
 SimpleWebServer::~SimpleWebServer() {
     stop();
 }
-
 void SimpleWebServer::start() {
     if (running_) return;
-
     running_ = true;
     server_thread_ = std::thread(&SimpleWebServer::serverThread, this);
 }
-
 void SimpleWebServer::stop() {
     if (!running_) return;
-
     running_ = false;
-
     if (server_socket_ != -1) {
         close(server_socket_);
         server_socket_ = -1;
     }
-
     if (server_thread_.joinable()) {
         server_thread_.join();
     }
 }
-
 void SimpleWebServer::serverThread() {
         server_socket_ = socket(AF_INET, SOCK_STREAM, 0);
         if (server_socket_ == -1) {
             std::cerr << "Failed to create socket: " << strerror(errno) << std::endl;
             return;
         }
-
         int reuse = 1;
         if (setsockopt(server_socket_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == -1) {
             std::cerr << "Warning: Failed to set SO_REUSEADDR: " << strerror(errno) << std::endl;
         }
-
         sockaddr_in server_addr{};
         server_addr.sin_family = AF_INET;
         server_addr.sin_addr.s_addr = INADDR_ANY;
         server_addr.sin_port = htons(port_);
-
         if (bind(server_socket_, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
             std::cerr << "Failed to bind socket on port " << port_ << ": " << strerror(errno) << std::endl;
             close(server_socket_);
             server_socket_ = -1;
             return;
         }
-
         if (listen(server_socket_, 5) == -1) {
             std::cerr << "Failed to listen on socket" << std::endl;
             close(server_socket_);
             return;
         }
-
         std::cout << "Web server started on port " << port_ << std::endl;
         std::cout << "Open http://localhost:" << port_ << " in your browser" << std::endl;
-
         while (running_) {
             sockaddr_in client_addr{};
             socklen_t client_len = sizeof(client_addr);
-
             int client_socket = accept(server_socket_, (sockaddr*)&client_addr, &client_len);
             if (client_socket == -1) {
                 if (running_) {
@@ -87,7 +71,6 @@ void SimpleWebServer::serverThread() {
                 }
                 continue;
             }
-
             char buffer[4096];
             ssize_t bytes_read = read(client_socket, buffer, sizeof(buffer) - 1);
             if (bytes_read > 0) {
@@ -95,19 +78,15 @@ void SimpleWebServer::serverThread() {
                 std::string response = handleRequest(buffer);
                 write(client_socket, response.c_str(), response.size());
             }
-
             close(client_socket);
         }
-
         close(server_socket_);
         server_socket_ = -1;
 }
-
 std::string SimpleWebServer::handleRequest(const std::string& request) {
         std::istringstream iss(request);
         std::string method, path, version;
         iss >> method >> path >> version;
-
         if (method == "GET") {
             if (path == "/" || path == "/index.html") {
                 return "HTTP/1.1 200 OK\r\n"
@@ -145,7 +124,6 @@ std::string SimpleWebServer::handleRequest(const std::string& request) {
                   "Method Not Allowed";
         }
 }
-
 static unsigned long read_cgroup_limit(const char* path) {
     char buffer[256];
     std::ifstream file(path);
@@ -154,11 +132,9 @@ static unsigned long read_cgroup_limit(const char* path) {
     }
     file.getline(buffer, sizeof(buffer));
     file.close();
-    
     if (strcmp(buffer, "max") == 0) {
         return 0;
     }
-    
     char* endptr;
     unsigned long val = strtoul(buffer, &endptr, 10);
     if (*endptr == '\0' || *endptr == '\n' || *endptr == ' ') {
@@ -166,41 +142,31 @@ static unsigned long read_cgroup_limit(const char* path) {
     }
     return 0;
 }
-
 std::string SimpleWebServer::getContainerListJSON() {
         static std::map<std::string, unsigned long> prev_cpu_usage;
         static std::map<std::string, time_t> prev_time;
-        
         std::string json = "{\"containers\":[";
-
         int count;
         container_info_t** containers = container_manager_list(cm_, &count);
-
         std::vector<container_info_t*> active_containers;
         for (int i = 0; i < count; i++) {
             if (containers[i]->state != CONTAINER_DESTROYED) {
                 active_containers.push_back(containers[i]);
             }
         }
-
         time_t current_time = time(nullptr);
-
         for (size_t i = 0; i < active_containers.size(); i++) {
             container_info_t* info = active_containers[i];
             if (i > 0) json += ",";
-
             unsigned long cpu_usage = 0, memory_usage = 0;
             unsigned long cpu_limit = 0, memory_limit = 0;
             double cpu_percent = 0.0;
             double memory_percent = 0.0;
-            
             if (info->state == CONTAINER_RUNNING) {
                 resource_manager_get_stats(cm_->rm, info->id, &cpu_usage, &memory_usage);
-                
                 char path[1024];
                 unsigned long cpu_quota_us = 0;
                 unsigned long cpu_period_us = 100000;
-                
                 if (cm_->rm->version == CGROUP_V2) {
                     snprintf(path, sizeof(path), "%s/%s_%s/cpu.max", "/sys/fs/cgroup", cm_->rm->cgroup_path, info->id);
                     std::string cpu_max_line;
@@ -216,7 +182,6 @@ std::string SimpleWebServer::getContainerListJSON() {
                             }
                         }
                     }
-                    
                     snprintf(path, sizeof(path), "%s/%s_%s/memory.max", "/sys/fs/cgroup", cm_->rm->cgroup_path, info->id);
                     memory_limit = read_cgroup_limit(path);
                 } else {
@@ -225,7 +190,6 @@ std::string SimpleWebServer::getContainerListJSON() {
                     if (access(cpu_path, F_OK) != 0) {
                         snprintf(cpu_path, sizeof(cpu_path), "%s/%s_%s", "/sys/fs/cgroup/cpu", cm_->rm->cgroup_path, info->id);
                     }
-                    
                     int ret = snprintf(path, sizeof(path), "%s/cpu.cfs_quota_us", cpu_path);
                     if (ret > 0 && (size_t)ret < sizeof(path)) {
                         cpu_quota_us = read_cgroup_limit(path);
@@ -237,14 +201,11 @@ std::string SimpleWebServer::getContainerListJSON() {
                             cpu_period_us = period;
                         }
                     }
-                    
                     snprintf(path, sizeof(path), "%s/%s_%s/memory.limit_in_bytes", "/sys/fs/cgroup/memory", cm_->rm->cgroup_path, info->id);
                     memory_limit = read_cgroup_limit(path);
                 }
-                
                 std::string container_id_str = std::string(info->id);
-                
-                if (prev_cpu_usage.find(container_id_str) != prev_cpu_usage.end() && 
+                if (prev_cpu_usage.find(container_id_str) != prev_cpu_usage.end() &&
                     prev_time.find(container_id_str) != prev_time.end()) {
                     unsigned long cpu_diff = cpu_usage - prev_cpu_usage[container_id_str];
                     time_t time_diff = current_time - prev_time[container_id_str];
@@ -267,7 +228,6 @@ std::string SimpleWebServer::getContainerListJSON() {
                 }
                 prev_cpu_usage[container_id_str] = cpu_usage;
                 prev_time[container_id_str] = current_time;
-                
                 if (memory_limit > 0) {
                     memory_percent = 100.0 * ((double)memory_usage / (double)memory_limit);
                     if (memory_percent > 100.0) memory_percent = 100.0;
@@ -279,7 +239,6 @@ std::string SimpleWebServer::getContainerListJSON() {
                 prev_cpu_usage.erase(container_id_str);
                 prev_time.erase(container_id_str);
             }
-
             const char* state_names[] = {"CREATED", "RUNNING", "STOPPED", "DESTROYED"};
             const char* state_str = "UNKNOWN";
             if ((int)info->state >= 0 && (int)info->state < (int)(sizeof(state_names) / sizeof(state_names[0]))) {
@@ -299,17 +258,14 @@ std::string SimpleWebServer::getContainerListJSON() {
             }
             json += "}";
         }
-
         json += "]}";
         return json;
 }
-
 unsigned long SimpleWebServer::getSystemTotalMemory() {
     std::ifstream meminfo("/proc/meminfo");
     if (!meminfo.is_open()) {
         return 0;
     }
-    
     std::string line;
     while (std::getline(meminfo, line)) {
         if (line.find("MemTotal:") == 0) {
@@ -317,18 +273,16 @@ unsigned long SimpleWebServer::getSystemTotalMemory() {
             std::string label, value, unit;
             iss >> label >> value >> unit;
             unsigned long kb = std::stoul(value);
-            return kb * 1024; 
+            return kb * 1024;
         }
     }
     return 0;
 }
-
 unsigned long SimpleWebServer::getSystemAvailableMemory() {
     std::ifstream meminfo("/proc/meminfo");
     if (!meminfo.is_open()) {
         return 0;
     }
-    
     std::string line;
     while (std::getline(meminfo, line)) {
         if (line.find("MemAvailable:") == 0) {
@@ -336,10 +290,9 @@ unsigned long SimpleWebServer::getSystemAvailableMemory() {
             std::string label, value, unit;
             iss >> label >> value >> unit;
             unsigned long kb = std::stoul(value);
-            return kb * 1024; 
+            return kb * 1024;
         }
     }
-    
     meminfo.clear();
     meminfo.seekg(0);
     while (std::getline(meminfo, line)) {
@@ -348,20 +301,17 @@ unsigned long SimpleWebServer::getSystemAvailableMemory() {
             std::string label, value, unit;
             iss >> label >> value >> unit;
             unsigned long kb = std::stoul(value);
-            return kb * 1024; 
+            return kb * 1024;
         }
     }
     return 0;
 }
-
 double SimpleWebServer::getSystemCPUPercent() {
     static unsigned long prev_idle = 0, prev_total = 0;
-    
     std::ifstream stat("/proc/stat");
     if (!stat.is_open()) {
         return 0.0;
     }
-    
     std::string line;
     if (std::getline(stat, line)) {
         if (line.find("cpu ") == 0) {
@@ -369,14 +319,11 @@ double SimpleWebServer::getSystemCPUPercent() {
             std::string cpu_label;
             unsigned long user, nice, system, idle, iowait, irq, softirq, steal;
             iss >> cpu_label >> user >> nice >> system >> idle >> iowait >> irq >> softirq >> steal;
-            
             unsigned long total = user + nice + system + idle + iowait + irq + softirq + steal;
             unsigned long total_idle = idle + iowait;
-            
             if (prev_total > 0) {
                 unsigned long total_diff = total - prev_total;
                 unsigned long idle_diff = total_idle - prev_idle;
-                
                 if (total_diff > 0) {
                     double cpu_percent = 100.0 * (1.0 - ((double)idle_diff / (double)total_diff));
                     prev_idle = total_idle;
@@ -384,21 +331,17 @@ double SimpleWebServer::getSystemCPUPercent() {
                     return cpu_percent;
                 }
             }
-            
             prev_idle = total_idle;
             prev_total = total;
         }
     }
-    
     return 0.0;
 }
-
 std::string SimpleWebServer::getSystemInfoJSON() {
     unsigned long total_mem = getSystemTotalMemory();
     unsigned long available_mem = getSystemAvailableMemory();
     unsigned long used_mem = total_mem - available_mem;
     double cpu_percent = getSystemCPUPercent();
-    
     std::string json = "{";
     json += "\"used_memory\":" + std::to_string(used_mem) + ",";
     json += "\"total_memory\":" + std::to_string(total_mem) + ",";
@@ -406,7 +349,6 @@ std::string SimpleWebServer::getSystemInfoJSON() {
     json += "}";
     return json;
 }
-
 std::string SimpleWebServer::generateHTML() {
         return R"HTML(
 <!DOCTYPE html>
@@ -414,7 +356,7 @@ std::string SimpleWebServer::generateHTML() {
 <head>
     <meta charset="UTF-8">
     <title>Container Monitor</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https:
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background: #f0f0f0; }
         .container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -432,20 +374,16 @@ std::string SimpleWebServer::generateHTML() {
         <h1>Container Monitor</h1>
         <div id="containers-list"></div>
     </div>
-
     <script>
         const charts = {};
-
         function formatBytes(bytes) {
             if (!bytes || bytes === 0) return '0 MB';
             const mb = bytes / (1024 * 1024);
             return mb.toFixed(2) + ' MB';
         }
-
         function createChart(containerId, type, canvasId) {
             const ctx = document.getElementById(canvasId).getContext('2d');
             const color = type === 'cpu' ? '#2196F3' : '#FF9800';
-            
             return new Chart(ctx, {
                 type: 'doughnut',
                 data: {
@@ -475,38 +413,31 @@ std::string SimpleWebServer::generateHTML() {
                 }
             });
         }
-
         function updateContainers() {
             fetch('/api/containers')
                 .then(r => r.json())
                 .then(data => {
                     const containersList = document.getElementById('containers-list');
                     const existingContainers = new Set();
-                    
                     if (!data.containers || data.containers.length === 0) {
                         containersList.innerHTML = '<p style="text-align: center; color: #666;">No active containers</p>';
                         charts = {};
                         return;
                     }
-                    
                     data.containers.forEach(container => {
                         existingContainers.add(container.id);
                         const containerId = 'container-' + container.id;
                         let containerDiv = document.getElementById(containerId);
-                        
                         if (!containerDiv) {
                             containerDiv = document.createElement('div');
                             containerDiv.className = 'container-section';
                             containerDiv.id = containerId;
-                            
                             const containerTitle = document.createElement('div');
                             containerTitle.className = 'container-title';
                             containerTitle.textContent = 'Container: ' + container.id;
                             containerDiv.appendChild(containerTitle);
-                            
                             const chartsDiv = document.createElement('div');
                             chartsDiv.className = 'charts';
-                            
                             const cpuWrapper = document.createElement('div');
                             cpuWrapper.className = 'chart-wrapper';
                             const cpuTitle = document.createElement('div');
@@ -520,7 +451,6 @@ std::string SimpleWebServer::generateHTML() {
                             cpuContainer.appendChild(cpuCanvas);
                             cpuWrapper.appendChild(cpuContainer);
                             chartsDiv.appendChild(cpuWrapper);
-                            
                             const ramWrapper = document.createElement('div');
                             ramWrapper.className = 'chart-wrapper';
                             const ramTitle = document.createElement('div');
@@ -534,14 +464,11 @@ std::string SimpleWebServer::generateHTML() {
                             ramContainer.appendChild(ramCanvas);
                             ramWrapper.appendChild(ramContainer);
                             chartsDiv.appendChild(ramWrapper);
-                            
                             containerDiv.appendChild(chartsDiv);
                             containersList.appendChild(containerDiv);
-                            
                             charts['cpu-' + container.id] = createChart(container.id, 'cpu', 'cpu-' + container.id);
                             charts['ram-' + container.id] = createChart(container.id, 'ram', 'ram-' + container.id);
                         }
-                        
                         if (container.state === 'RUNNING') {
                             if (container.cpu_percent !== undefined && !isNaN(container.cpu_percent)) {
                                 const cpuPercent = Math.min(100, Math.max(0, parseFloat(container.cpu_percent)));
@@ -550,7 +477,6 @@ std::string SimpleWebServer::generateHTML() {
                                     charts['cpu-' + container.id].update('none');
                                 }
                             }
-                            
                             if (container.memory_percent !== undefined && !isNaN(container.memory_percent)) {
                                 const memPercent = Math.min(100, Math.max(0, parseFloat(container.memory_percent)));
                                 if (charts['ram-' + container.id]) {
@@ -569,7 +495,6 @@ std::string SimpleWebServer::generateHTML() {
                             }
                         }
                     });
-                    
                     Object.keys(charts).forEach(chartKey => {
                         const containerId = chartKey.replace('cpu-', '').replace('ram-', '');
                         if (!existingContainers.has(containerId)) {
@@ -585,7 +510,6 @@ std::string SimpleWebServer::generateHTML() {
                     console.error('Error:', error);
                 });
         }
-
         updateContainers();
         setInterval(updateContainers, 10000);
     </script>

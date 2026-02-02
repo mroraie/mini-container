@@ -18,20 +18,16 @@
 #include <algorithm>
 #include "../include/container_manager.hpp"
 #include "web_server_simple.hpp"
-
 using namespace std;
-
 static container_manager_t cm;
 static bool running = true;
 static bool monitor_mode = false;
 static SimpleWebServer* web_server = nullptr;
-
 static const char *state_names[] = {
     [CONTAINER_CREATED] = "CREATED",
     [CONTAINER_RUNNING] = "RUNNING",
     [CONTAINER_STOPPED] = "STOPPED",
     [CONTAINER_DESTROYED] = "DESTROYED"};
-
 static inline const char *safe_state_name(container_state_t state) {
     int s = (int)state;
     if (s < (int)CONTAINER_CREATED || s > (int)CONTAINER_DESTROYED) {
@@ -40,27 +36,21 @@ static inline const char *safe_state_name(container_state_t state) {
     const char *name = state_names[s];
     return name ? name : "UNKNOWN";
 }
-
 void clear_screen() {
     printf("\033[2J\033[H");
 }
-
 void hide_cursor() {
     printf("\033[?25l");
 }
-
 void show_cursor() {
     printf("\033[?25h");
 }
-
 void set_color(const char* color) {
     printf("%s", color);
 }
-
 void reset_color() {
     printf("\033[0m");
 }
-
 const char* COLOR_GREEN = "\033[32m";
 const char* COLOR_RED = "\033[31m";
 const char* COLOR_YELLOW = "\033[33m";
@@ -68,7 +58,6 @@ const char* COLOR_CYAN = "\033[36m";
 const char* COLOR_BLUE = "\033[34m";
 const char* COLOR_WHITE = "\033[37m";
 const char* COLOR_BOLD = "\033[1m";
-
 static void print_usage(const char *program_name)
 {
     printf("Mini Container System - Lightweight container implementation\n\n");
@@ -94,7 +83,6 @@ static void print_usage(const char *program_name)
     printf("  %s stop container_123\n", program_name);
     printf("  %s exec container_123 /bin/ps\n", program_name);
 }
-
 static int parse_run_options(int argc, char *argv[], container_config_t *config, int *detach)
 {
     static struct option long_options[] = {
@@ -104,17 +92,14 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
         {"root", required_argument, 0, 'r'},
         {"detach", no_argument, 0, 'd'},
         {0, 0, 0, 0}};
-
     int option_index = 0;
     int c;
-
     config->id = nullptr;
     config->fs_config.root_path = nullptr;
     *detach = 0;
     namespace_config_init(&config->ns_config);
     resource_limits_init(&config->res_limits);
     fs_config_init(&config->fs_config);
-
     while ((c = getopt_long(argc, argv, "hm:c:r:d", long_options, &option_index)) != -1)
     {
         switch (c)
@@ -126,15 +111,12 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
                 config->fs_config.root_path = nullptr;
             }
             return -1;
-
         case 'm':
             config->res_limits.memory.limit_bytes = atoi(optarg) * 1024 * 1024;
             break;
-
         case 'c':
             config->res_limits.cpu.shares = atoi(optarg);
             break;
-
         case 'r':
             if (config->fs_config.root_path) {
                 free(config->fs_config.root_path);
@@ -145,11 +127,9 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
                 return -1;
             }
             break;
-
         case 'd':
             *detach = 1;
             break;
-
         default:
             fprintf(stderr, "Unknown option: %c\n", c);
             if (config->fs_config.root_path) {
@@ -159,7 +139,6 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
             return -1;
         }
     }
-
     if (optind >= argc)
     {
         fprintf(stderr, "Error: no command specified\n");
@@ -169,10 +148,8 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
         }
         return -1;
     }
-
     config->command = &argv[optind];
     config->command_argc = argc - optind;
-
     if (!config->fs_config.root_path)
     {
         config->fs_config.root_path = strdup("/");
@@ -181,24 +158,19 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
             return -1;
         }
     }
-
     return 0;
 }
-
 static int handle_run(int argc, char *argv[])
 {
     container_config_t config;
     int detach = 0;
-
     if (parse_run_options(argc, argv, &config, &detach) != 0)
     {
         return EXIT_FAILURE;
     }
-
     if (container_manager_run(&cm, &config) != 0)
     {
         fprintf(stderr, "Failed to run container\n");
-        // Free allocated memory on error
         if (config.id) {
             free(config.id);
             config.id = nullptr;
@@ -209,7 +181,6 @@ static int handle_run(int argc, char *argv[])
         }
         return EXIT_FAILURE;
     }
-
     container_info_t *info = container_manager_get_info(&cm, config.id);
     if (info)
     {
@@ -231,8 +202,6 @@ static int handle_run(int argc, char *argv[])
             }
         }
     }
-
-    // Free allocated memory (config.id may have been allocated by container_manager_run)
     if (config.id) {
         free(config.id);
         config.id = nullptr;
@@ -241,10 +210,8 @@ static int handle_run(int argc, char *argv[])
         free(config.fs_config.root_path);
         config.fs_config.root_path = nullptr;
     }
-
     return EXIT_SUCCESS;
 }
-
 static int handle_start(int argc, char *argv[])
 {
     if (argc < 2)
@@ -252,19 +219,15 @@ static int handle_start(int argc, char *argv[])
         fprintf(stderr, "Error: container ID required\n");
         return EXIT_FAILURE;
     }
-
     const char *container_id = argv[1];
-
     if (container_manager_start(&cm, container_id) != 0)
     {
         fprintf(stderr, "Failed to start container %s\n", container_id);
         return EXIT_FAILURE;
     }
-
     printf("Container %s started\n", container_id);
     return EXIT_SUCCESS;
 }
-
 static int handle_stop(int argc, char *argv[])
 {
     if (argc < 2)
@@ -272,33 +235,27 @@ static int handle_stop(int argc, char *argv[])
         fprintf(stderr, "Error: container ID required\n");
         return EXIT_FAILURE;
     }
-
     const char *container_id = argv[1];
-
     if (container_manager_stop(&cm, container_id) != 0)
     {
         fprintf(stderr, "Failed to stop container %s\n", container_id);
         return EXIT_FAILURE;
     }
-
     printf("Container %s stopped\n", container_id);
     return EXIT_SUCCESS;
 }
-
 static int handle_list(int argc, char *argv[])
 {
     (void)argc;
     (void)argv;
     int count;
     container_info_t **containers = container_manager_list(&cm, &count);
-
     vector<container_info_t*> active_containers;
     for (int i = 0; i < count; i++) {
         if (containers[i]->state != CONTAINER_DESTROYED) {
             active_containers.push_back(containers[i]);
         }
     }
-
     if (active_containers.size() == 0)
     {
         printf("No containers\n");
@@ -307,18 +264,15 @@ static int handle_list(int argc, char *argv[])
         printf("  or use interactive menu: ./mini-container\n");
         return EXIT_SUCCESS;
     }
-
     printf("%-20s %-10s %-10s %-15s %-15s\n",
            "CONTAINER ID", "STATE", "PID", "CREATED", "STARTED");
     printf("%-20s %-10s %-10s %-15s %-15s\n",
            "------------", "-----", "---", "-------", "-------");
-
     for (size_t i = 0; i < active_containers.size(); i++)
     {
         container_info_t *info = active_containers[i];
         char created_str[20] = "";
         char started_str[20] = "";
-
         if (info->created_at > 0)
         {
             struct tm *tm_created = localtime(&info->created_at);
@@ -326,7 +280,6 @@ static int handle_list(int argc, char *argv[])
                 strftime(created_str, sizeof(created_str), "%H:%M:%S", tm_created);
             }
         }
-
         if (info->started_at > 0)
         {
             struct tm *tm_started = localtime(&info->started_at);
@@ -334,7 +287,6 @@ static int handle_list(int argc, char *argv[])
                 strftime(started_str, sizeof(started_str), "%H:%M:%S", tm_started);
             }
         }
-
         printf("%-20s %-10s %-10d %-15s %-15s\n",
                info->id,
                safe_state_name(info->state),
@@ -342,10 +294,8 @@ static int handle_list(int argc, char *argv[])
                created_str,
                started_str);
     }
-
     return EXIT_SUCCESS;
 }
-
 static int handle_exec(int argc, char *argv[])
 {
     if (argc < 3)
@@ -353,22 +303,17 @@ static int handle_exec(int argc, char *argv[])
         fprintf(stderr, "Error: container ID and command required\n");
         return EXIT_FAILURE;
     }
-
     const char *container_id = argv[1];
     char **command = &argv[2];
     int command_argc = argc - 2;
-
     int result = container_manager_exec(&cm, container_id, command, command_argc);
-
     if (result != 0)
     {
         fprintf(stderr, "Command failed with exit code %d\n", result);
         return EXIT_FAILURE;
     }
-
     return EXIT_SUCCESS;
 }
-
 static int handle_destroy(int argc, char *argv[])
 {
     if (argc < 2)
@@ -376,19 +321,15 @@ static int handle_destroy(int argc, char *argv[])
         fprintf(stderr, "Error: container ID required\n");
         return EXIT_FAILURE;
     }
-
     const char *container_id = argv[1];
-
     if (container_manager_destroy(&cm, container_id) != 0)
     {
         fprintf(stderr, "Failed to destroy container %s\n", container_id);
         return EXIT_FAILURE;
     }
-
     printf("Container %s destroyed\n", container_id);
     return EXIT_SUCCESS;
 }
-
 static int handle_info(int argc, char *argv[])
 {
     if (argc < 2)
@@ -396,16 +337,13 @@ static int handle_info(int argc, char *argv[])
         fprintf(stderr, "Error: container ID required\n");
         return EXIT_FAILURE;
     }
-
     const char *container_id = argv[1];
     container_info_t *info = container_manager_get_info(&cm, container_id);
-
     if (!info)
     {
         fprintf(stderr, "Container %s not found\n", container_id);
         return EXIT_FAILURE;
     }
-
     printf("Container ID: %s\n", info->id);
     printf("State: %s\n", safe_state_name(info->state));
     printf("PID: %d\n", info->pid);
@@ -418,7 +356,6 @@ static int handle_info(int argc, char *argv[])
     {
         printf("Stopped: %s", ctime(&info->stopped_at));
     }
-
     if (info->state == CONTAINER_RUNNING)
     {
         unsigned long cpu_usage = 0, memory_usage = 0;
@@ -426,32 +363,26 @@ static int handle_info(int argc, char *argv[])
         printf("CPU Usage: %lu nanoseconds\n", cpu_usage);
         printf("Memory Usage: %lu bytes\n", memory_usage);
     }
-
     return EXIT_SUCCESS;
 }
-
 string format_bytes(unsigned long bytes) {
     const char* units[] = {"B", "KB", "MB", "GB"};
     int unit = 0;
     double size = bytes;
-    
     while (size >= 1024 && unit < 3) {
         size /= 1024;
         unit++;
     }
-    
     char buf[64];
     snprintf(buf, sizeof(buf), "%.2f %s", size, units[unit]);
     return string(buf);
 }
-
 string format_duration(time_t start, time_t end) {
     if (start == 0 || end == 0) return "--";
     long diff = end - start;
     int hours = diff / 3600;
     int minutes = (diff % 3600) / 60;
     int seconds = diff % 60;
-    
     char buf[32];
     if (hours > 0) {
         snprintf(buf, sizeof(buf), "%d:%02d:%02d", hours, minutes, seconds);
@@ -460,32 +391,26 @@ string format_duration(time_t start, time_t end) {
     }
     return string(buf);
 }
-
 double calculate_cpu_percent(unsigned long cpu_ns, time_t start_time) {
     if (start_time == 0) return 0.0;
     time_t now = time(nullptr);
     long elapsed = now - start_time;
     if (elapsed <= 0) return 0.0;
-    
     double cpu_seconds = cpu_ns / 1e9;
     return (cpu_seconds / elapsed) * 100.0;
 }
-
 void display_compact_monitor() {
     int count;
     container_info_t **containers = container_manager_list(&cm, &count);
-    
     vector<container_info_t*> active_containers;
     for (int i = 0; i < count; i++) {
         if (containers[i]->state != CONTAINER_DESTROYED) {
             active_containers.push_back(containers[i]);
         }
     }
-    
     int running_count = 0;
     double total_cpu_percent = 0.0;
     unsigned long total_memory_bytes = 0;
-    
     for (size_t i = 0; i < active_containers.size(); i++) {
         if (active_containers[i]->state == CONTAINER_RUNNING) {
             running_count++;
@@ -497,36 +422,29 @@ void display_compact_monitor() {
             }
         }
     }
-    
     set_color(COLOR_BOLD);
     set_color(COLOR_CYAN);
     printf("Mini Container Monitor (Live)\n");
     reset_color();
-    
     set_color(COLOR_GREEN);
     printf("Running: %d  ", running_count);
     reset_color();
     printf("Total: %zu  ", active_containers.size());
-    
     set_color(COLOR_YELLOW);
     printf("Total CPU: %.1f%%  ", total_cpu_percent);
     reset_color();
-    
     set_color(COLOR_CYAN);
     string ram_str = format_bytes(total_memory_bytes);
     printf("Total RAM: %s  ", ram_str.c_str());
     reset_color();
-    
     time_t now = time(nullptr);
     char time_str[64];
     strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&now));
     printf("Time: %s\n", time_str);
-    
     set_color(COLOR_BOLD);
     printf("%-20s %-8s %-10s %-13s %-12s %-10s\n",
            "CONTAINER ID", "PID", "STATE", "CPU%", "MEMORY", "RUNTIME");
     reset_color();
-    
     if (active_containers.size() == 0) {
         set_color(COLOR_YELLOW);
         printf("No containers\n");
@@ -542,13 +460,11 @@ void display_compact_monitor() {
                  if (a->state != CONTAINER_RUNNING && b->state == CONTAINER_RUNNING) return false;
                  return a->started_at > b->started_at;
              });
-        
         int max_display = (sorted_containers.size() > 10) ? 10 : sorted_containers.size();
         for (int i = 0; i < max_display; i++) {
             container_info_t* info = sorted_containers[i];
             const char* state = safe_state_name(info->state);
             const char* state_color = COLOR_WHITE;
-            
             if (info->state == CONTAINER_RUNNING) {
                 state_color = COLOR_GREEN;
             } else if (info->state == CONTAINER_STOPPED) {
@@ -556,30 +472,24 @@ void display_compact_monitor() {
             } else if (info->state == CONTAINER_CREATED) {
                 state_color = COLOR_YELLOW;
             }
-            
             printf("%-20s %-8d ", info->id, info->pid);
             set_color(state_color);
             printf("%-10s", state);
             reset_color();
-            
             if (info->state == CONTAINER_RUNNING) {
                 unsigned long cpu_usage = 0, memory_usage = 0;
                 resource_manager_get_stats(cm.rm, info->id, &cpu_usage, &memory_usage);
-                
                 double cpu_percent = calculate_cpu_percent(cpu_usage, info->started_at);
                 string mem_str = format_bytes(memory_usage);
-                
                 char cpu_buf[16];
                 snprintf(cpu_buf, sizeof(cpu_buf), "%.1f%%", cpu_percent);
                 printf(" %-13s %-12s", cpu_buf, mem_str.c_str());
             } else {
                 printf(" %-13s %-12s", "--", "--");
             }
-            
             string runtime = format_duration(info->started_at, now);
             printf(" %-10s\n", runtime.c_str());
         }
-        
         if (sorted_containers.size() > 10) {
             set_color(COLOR_YELLOW);
             printf("... and %d more container(s)\n", (int)(sorted_containers.size() - 10));
@@ -588,51 +498,41 @@ void display_compact_monitor() {
     }
     printf("\n");
 }
-
 void display_monitor() {
     clear_screen();
     hide_cursor();
-    
     while (monitor_mode && running) {
         clear_screen();
-        
         set_color(COLOR_BOLD);
         set_color(COLOR_CYAN);
         printf("Mini Container Monitor (htop-like)\n");
         reset_color();
-        
         int count;
         container_info_t **containers = container_manager_list(&cm, &count);
-        
     vector<container_info_t*> active_containers;
     for (int i = 0; i < count; i++) {
         if (containers[i]->state != CONTAINER_DESTROYED) {
             active_containers.push_back(containers[i]);
         }
     }
-    
     int running_count = 0;
         for (size_t i = 0; i < active_containers.size(); i++) {
             if (active_containers[i]->state == CONTAINER_RUNNING) {
                 running_count++;
             }
         }
-        
         set_color(COLOR_GREEN);
         printf("Running: %d  ", running_count);
         reset_color();
         printf("Total: %zu  ", active_containers.size());
-        
         time_t now = time(nullptr);
         char time_str[64];
         strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&now));
         printf("Time: %s\n", time_str);
-        
         set_color(COLOR_BOLD);
         printf("%-20s %-8s %-10s %-12s %-12s %-10s %-10s\n",
                "CONTAINER ID", "PID", "STATE", "CPU%", "MEMORY", "RUNTIME", "CREATED");
         reset_color();
-        
         if (active_containers.size() == 0) {
             set_color(COLOR_YELLOW);
             printf("No containers\n");
@@ -648,11 +548,9 @@ void display_monitor() {
                      if (a->state != CONTAINER_RUNNING && b->state == CONTAINER_RUNNING) return false;
                      return a->started_at > b->started_at;
                  });
-            
             for (auto info : sorted_containers) {
                 const char* state = safe_state_name(info->state);
                 const char* state_color = COLOR_WHITE;
-                
                 if (info->state == CONTAINER_RUNNING) {
                     state_color = COLOR_GREEN;
                 } else if (info->state == CONTAINER_STOPPED) {
@@ -660,27 +558,21 @@ void display_monitor() {
                 } else if (info->state == CONTAINER_CREATED) {
                     state_color = COLOR_YELLOW;
                 }
-                
                 printf("%-20s %-8d ", info->id, info->pid);
                 set_color(state_color);
                 printf("%-10s", state);
                 reset_color();
-                
                 if (info->state == CONTAINER_RUNNING) {
                     unsigned long cpu_usage = 0, memory_usage = 0;
                     resource_manager_get_stats(cm.rm, info->id, &cpu_usage, &memory_usage);
-                    
                     double cpu_percent = calculate_cpu_percent(cpu_usage, info->started_at);
                     string mem_str = format_bytes(memory_usage);
-                    
                     printf(" %-12.1f %-12s", cpu_percent, mem_str.c_str());
                 } else {
                     printf(" %-12s %-12s", "--", "--");
                 }
-                
                 string runtime = format_duration(info->started_at, now);
                 printf(" %-10s", runtime.c_str());
-                
                 char created_str[20] = "";
                 if (info->created_at > 0) {
                     struct tm *tm_created = localtime(&info->created_at);
@@ -691,14 +583,11 @@ void display_monitor() {
                 printf(" %-10s\n", created_str);
             }
         }
-        
         printf("\n");
         set_color(COLOR_CYAN);
         printf("Press 'q' to quit monitor, 'r' to refresh\n");
         reset_color();
-        
         fflush(stdout);
-        
         struct termios old_term, new_term;
         tcgetattr(STDIN_FILENO, &old_term);
         new_term = old_term;
@@ -706,7 +595,6 @@ void display_monitor() {
         new_term.c_cc[VMIN] = 0;
         new_term.c_cc[VTIME] = 0;
         tcsetattr(STDIN_FILENO, TCSANOW, &new_term);
-        
         char c;
         if (read(STDIN_FILENO, &c, 1) > 0) {
             if (c == 'q' || c == 'Q') {
@@ -714,29 +602,23 @@ void display_monitor() {
                 break;
             }
         }
-        
         tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
-        
-        usleep(5000000); 
+        usleep(5000000);
     }
-    
     show_cursor();
     clear_screen();
 }
-
 void interactive_create_container() {
     clear_screen();
     set_color(COLOR_BOLD);
     set_color(COLOR_CYAN);
     printf("Create New Container\n");
     reset_color();
-    
     char command[1024];
     char container_name[256] = "";
-    char root_path[512] = "/";  
+    char root_path[512] = "/";
     int memory = 128;
     int cpu = 1024;
-    
     printf("\n");
     printf("Container name (optional, press Enter for auto-generated): ");
     fflush(stdout);
@@ -746,11 +628,9 @@ void interactive_create_container() {
             container_name[len-1] = '\0';
         }
     }
-    
     set_color(COLOR_CYAN);
     printf("\nSuggested Commands for Testing\n");
     reset_color();
-    
     set_color(COLOR_YELLOW);
     printf("\n* CPU Stress Test:\n");
     reset_color();
@@ -762,7 +642,6 @@ void interactive_create_container() {
     set_color(COLOR_GREEN);
     printf("  sh -c 'while true; do echo $((12345*67890)) > /dev/null; done'\n");
     reset_color();
-    
     set_color(COLOR_YELLOW);
     printf("\n* Memory Limit Test:\n");
     reset_color();
@@ -778,16 +657,13 @@ void interactive_create_container() {
     set_color(COLOR_GREEN);
     printf("  sh -c 'x=\"\"; for i in $(seq 1 2048); do x=\"$x$(head -c 1M /dev/zero)\"; sleep 0.0147; done; sleep infinity'\n");
     reset_color();
-    
     set_color(COLOR_YELLOW);
     printf("\n* Combined CPU and RAM Stress Test:\n");
     reset_color();
     set_color(COLOR_GREEN);
     printf("  sh -c 'a=\"\"; while true; do a=\"$a$(printf %%0100000d 0)\"; done'\n");
     reset_color();
-    
     printf("\n");
-    
     printf("\nCommand to run: ");
     fflush(stdout);
     if (!fgets(command, sizeof(command), stdin)) {
@@ -798,7 +674,6 @@ void interactive_create_container() {
     if (len > 0 && command[len-1] == '\n') {
         command[len-1] = '\0';
     }
-    
     printf("Memory limit (MB, default 128): ");
     fflush(stdout);
     char mem_str[64];
@@ -806,7 +681,6 @@ void interactive_create_container() {
         int m = atoi(mem_str);
         if (m > 0) memory = m;
     }
-    
     printf("CPU shares (default 1024): ");
     fflush(stdout);
     char cpu_str[64];
@@ -814,7 +688,6 @@ void interactive_create_container() {
         int c = atoi(cpu_str);
         if (c > 0) cpu = c;
     }
-    
     printf("Root path (default / - uses real root for demo): ");
     fflush(stdout);
     char root_input[512];
@@ -827,16 +700,13 @@ void interactive_create_container() {
             strncpy(root_path, root_input, sizeof(root_path)-1);
         }
     }
-    
     vector<char*> args;
     string cmd = command;
     bool in_quotes = false;
     char quote_char = 0;
     string current_arg;
-    
     for (size_t i = 0; i < cmd.length(); ++i) {
         char c = cmd[i];
-        
         if ((c == '"' || c == '\'') && (i == 0 || cmd[i-1] != '\\')) {
             if (!in_quotes) {
                 in_quotes = true;
@@ -852,7 +722,6 @@ void interactive_create_container() {
                 char *arg = strdup(current_arg.c_str());
                 if (!arg) {
                     perror("strdup failed");
-                    // Free already allocated args
                     for (auto a : args) {
                         if (a) free(a);
                     }
@@ -865,12 +734,10 @@ void interactive_create_container() {
             current_arg += c;
         }
     }
-    
     if (!current_arg.empty()) {
         char *arg = strdup(current_arg.c_str());
         if (!arg) {
             perror("strdup failed");
-            // Free already allocated args
             for (auto a : args) {
                 if (a) free(a);
             }
@@ -879,16 +746,13 @@ void interactive_create_container() {
         args.push_back(arg);
     }
     args.push_back(nullptr);
-    
     container_config_t config;
     config.id = nullptr;
     config.fs_config.root_path = nullptr;
-    
     if (strlen(container_name) > 0) {
         config.id = strdup(container_name);
         if (!config.id) {
             perror("strdup failed for container name");
-            // Free already allocated args
             for (auto arg : args) {
                 if (arg) free(arg);
             }
@@ -898,13 +762,11 @@ void interactive_create_container() {
     namespace_config_init(&config.ns_config);
     resource_limits_init(&config.res_limits);
     fs_config_init(&config.fs_config);
-    
     config.res_limits.memory.limit_bytes = memory * 1024 * 1024;
     config.res_limits.cpu.shares = cpu;
     config.fs_config.root_path = strdup(root_path);
     if (!config.fs_config.root_path) {
         perror("strdup failed for root path");
-        // Free already allocated memory
         for (auto arg : args) {
             if (arg) free(arg);
         }
@@ -916,12 +778,10 @@ void interactive_create_container() {
     }
     config.command = args.data();
     config.command_argc = args.size() - 1;
-    
     printf("\n");
     set_color(COLOR_YELLOW);
     printf("Creating container...\n");
     reset_color();
-    
     if (container_manager_run(&cm, &config) != 0) {
         set_color(COLOR_RED);
         printf("Failed to create container\n");
@@ -934,8 +794,6 @@ void interactive_create_container() {
             reset_color();
         }
     }
-    
-    // Free allocated memory
     for (auto arg : args) {
         if (arg) free(arg);
     }
@@ -947,18 +805,15 @@ void interactive_create_container() {
         free(config.fs_config.root_path);
         config.fs_config.root_path = nullptr;
     }
-    
     printf("\nPress Enter to continue...");
     getchar();
 }
-
 void run_tests() {
     clear_screen();
     set_color(COLOR_BOLD);
     set_color(COLOR_CYAN);
     printf("System Tests\n");
     reset_color();
-    
     printf("\n");
     printf("1. CPU Usage Test\n");
     printf("2. Memory Limit Test\n");
@@ -967,30 +822,23 @@ void run_tests() {
     printf("5. Run All Tests\n");
     printf("0. Back to Menu\n");
     printf("\nSelect test: ");
-    
     char choice[10];
     fgets(choice, sizeof(choice), stdin);
     int test_num = atoi(choice);
-    
     if (test_num == 0) return;
-    
     container_config_t config;
     namespace_config_init(&config.ns_config);
     resource_limits_init(&config.res_limits);
     fs_config_init(&config.fs_config);
-    
     char container_id[256];
     snprintf(container_id, sizeof(container_id), "test_%ld", time(nullptr));
     config.id = container_id;
-    
     vector<char*> args;
-    
     if (test_num == 1 || test_num == 5) {
         printf("\n[Test 1] CPU Usage Test...\n");
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
-        config.fs_config.root_path = strdup("/");  
-        
+        config.fs_config.root_path = strdup("/");
         args.clear();
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -998,11 +846,9 @@ void run_tests() {
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
-        
         if (container_manager_run(&cm, &config) == 0) {
             printf("  Container created, waiting 3 seconds...\n");
             sleep(3);
-            
             container_info_t *info = container_manager_get_info(&cm, container_id);
             if (info && info->state == CONTAINER_RUNNING) {
                 unsigned long cpu_usage = 0, memory_usage = 0;
@@ -1011,22 +857,18 @@ void run_tests() {
                 printf("  Memory Usage: %s\n", format_bytes(memory_usage).c_str());
                 printf("  ✓ Test passed\n");
             }
-            
             container_manager_stop(&cm, container_id);
         }
-        
         for (auto arg : args) if (arg) free(arg);
         free(config.fs_config.root_path);
     }
-    
     if (test_num == 2 || test_num == 5) {
         printf("\n[Test 2] Memory Limit Test...\n");
         snprintf(container_id, sizeof(container_id), "test_mem_%ld", time(nullptr));
         config.id = container_id;
         config.res_limits.memory.limit_bytes = 64 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
-        config.fs_config.root_path = strdup("/");  
-        
+        config.fs_config.root_path = strdup("/");
         args.clear();
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -1034,11 +876,9 @@ void run_tests() {
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
-        
         if (container_manager_run(&cm, &config) == 0) {
             printf("  Container created, waiting 2 seconds...\n");
             sleep(2);
-            
             container_info_t *info = container_manager_get_info(&cm, container_id);
             if (info) {
                 unsigned long cpu_usage = 0, memory_usage = 0;
@@ -1046,22 +886,18 @@ void run_tests() {
                 printf("  Memory Usage: %s (Limit: 64 MB)\n", format_bytes(memory_usage).c_str());
                 printf("  ✓ Test passed\n");
             }
-            
             container_manager_stop(&cm, container_id);
         }
-        
         for (auto arg : args) if (arg) free(arg);
         free(config.fs_config.root_path);
     }
-    
     if (test_num == 3 || test_num == 5) {
         printf("\n[Test 3] CPU Limit Test...\n");
         snprintf(container_id, sizeof(container_id), "test_cpu_limit_%ld", time(nullptr));
         config.id = container_id;
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 512;
-        config.fs_config.root_path = strdup("/");  
-        
+        config.fs_config.root_path = strdup("/");
         args.clear();
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -1069,11 +905,9 @@ void run_tests() {
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
-        
         if (container_manager_run(&cm, &config) == 0) {
             printf("  Container created with CPU limit 512, waiting 3 seconds...\n");
             sleep(3);
-            
             container_info_t *info = container_manager_get_info(&cm, container_id);
             if (info && info->state == CONTAINER_RUNNING) {
                 unsigned long cpu_usage = 0, memory_usage = 0;
@@ -1081,22 +915,18 @@ void run_tests() {
                 printf("  CPU Usage: %lu ns\n", cpu_usage);
                 printf("  ✓ Test passed\n");
             }
-            
             container_manager_stop(&cm, container_id);
         }
-        
         for (auto arg : args) if (arg) free(arg);
         free(config.fs_config.root_path);
     }
-    
     if (test_num == 4 || test_num == 5) {
         printf("\n[Test 4] Combined Test (CPU + Memory)...\n");
         snprintf(container_id, sizeof(container_id), "test_combined_%ld", time(nullptr));
         config.id = container_id;
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
-        config.fs_config.root_path = strdup("/");  
-        
+        config.fs_config.root_path = strdup("/");
         args.clear();
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -1104,11 +934,9 @@ void run_tests() {
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
-        
         if (container_manager_run(&cm, &config) == 0) {
             printf("  Container created, waiting 3 seconds...\n");
             sleep(3);
-            
             container_info_t *info = container_manager_get_info(&cm, container_id);
             if (info && info->state == CONTAINER_RUNNING) {
                 unsigned long cpu_usage = 0, memory_usage = 0;
@@ -1117,26 +945,19 @@ void run_tests() {
                 printf("  Memory Usage: %s\n", format_bytes(memory_usage).c_str());
                 printf("  ✓ Test passed\n");
             }
-            
             container_manager_stop(&cm, container_id);
         }
-        
         for (auto arg : args) if (arg) free(arg);
         free(config.fs_config.root_path);
     }
-    
     printf("\nPress Enter to continue...");
     getchar();
 }
-
-// تابع برای گرفتن کل مموری سیستم (به بایت)
 static unsigned long get_total_system_memory() {
     struct sysinfo info;
     if (sysinfo(&info) == 0) {
         return info.totalram * info.mem_unit;
     }
-    
-    // Fallback: خواندن از /proc/meminfo
     FILE *fp = fopen("/proc/meminfo", "r");
     if (fp) {
         char line[256];
@@ -1145,63 +966,45 @@ static unsigned long get_total_system_memory() {
                 unsigned long mem_kb = 0;
                 if (sscanf(line, "MemTotal: %lu kB", &mem_kb) == 1) {
                     fclose(fp);
-                    return mem_kb * 1024; // تبدیل به بایت
+                    return mem_kb * 1024;
                 }
             }
         }
         fclose(fp);
     }
-    
-    // Fallback: 4GB به صورت پیش‌فرض
     return 4ULL * 1024 * 1024 * 1024;
 }
-
-// تابع برای گرفتن تعداد CPU ها
 static int get_cpu_count() {
     return sysconf(_SC_NPROCESSORS_ONLN);
 }
-
 void run_memory_cpu_test() {
     clear_screen();
     set_color(COLOR_BOLD);
     set_color(COLOR_CYAN);
     printf("Memory and CPU Test\n");
     reset_color();
-    
     unsigned long total_memory = get_total_system_memory();
     int cpu_count = get_cpu_count();
-    
     printf("\nSystem Information:\n");
     printf("  Total Memory: %s\n", format_bytes(total_memory).c_str());
     printf("  CPU Cores: %d\n", cpu_count);
-    
     printf("\nCreating test containers...\n");
-    
-    // ایجاد 3 کانتینر برای تست مموری: 1/16, 1/8, 1/4
     unsigned long memory_fractions[] = {
-        total_memory / 16,  // 1/16
-        total_memory / 8,   // 1/8
-        total_memory / 4    // 1/4
+        total_memory / 16,
+        total_memory / 8,
+        total_memory / 4
     };
-    
-    // ایجاد 3 کانتینر برای تست CPU با quota/period
-    // برای محدود کردن CPU به 1/16, 1/8, 1/4 از quota_us و period_us استفاده می‌کنیم
-    // period_us = 100000 (100ms)
-    // quota_us برای 1/16 = 6250, برای 1/8 = 12500, برای 1/4 = 25000
     int cpu_period_us = 100000;
     int cpu_quotas[] = {
-        6250,   // 1/16 CPU
-        12500,  // 1/8 CPU
-        25000   // 1/4 CPU
+        6250,
+        12500,
+        25000
     };
-    
-    // ایجاد کانتینرهای مموری
     for (int i = 0; i < 3; i++) {
         container_config_t config;
         namespace_config_init(&config.ns_config);
         resource_limits_init(&config.res_limits);
         fs_config_init(&config.fs_config);
-        
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "C%dMEM", i + 1);
         config.id = strdup(container_id);
@@ -1209,7 +1012,6 @@ void run_memory_cpu_test() {
             perror("strdup failed");
             continue;
         }
-        
         config.res_limits.memory.limit_bytes = memory_fractions[i];
         config.res_limits.cpu.shares = 1024; // CPU shares پیش‌فرض
         config.fs_config.root_path = strdup("/");
@@ -1218,14 +1020,10 @@ void run_memory_cpu_test() {
             free(config.id);
             continue;
         }
-        
-        // دستور برای مصرف مموری
         char cmd_buffer[512];
-        snprintf(cmd_buffer, sizeof(cmd_buffer), 
+        snprintf(cmd_buffer, sizeof(cmd_buffer),
                  "python3 -c 'import time; data = [bytearray(%lu) for _ in range(1)]; time.sleep(3600)'",
-                 memory_fractions[i] / 2); // استفاده از نصف مموری برای اطمینان
-        
-        // تخصیص حافظه برای command array
+                 memory_fractions[i] / 2);
         char **command = static_cast<char**>(calloc(4, sizeof(char*)));
         if (!command) {
             perror("calloc failed");
@@ -1233,7 +1031,6 @@ void run_memory_cpu_test() {
             free(config.fs_config.root_path);
             continue;
         }
-        
         command[0] = strdup("/bin/sh");
         if (!command[0]) {
             perror("strdup failed");
@@ -1242,7 +1039,6 @@ void run_memory_cpu_test() {
             free(config.fs_config.root_path);
             continue;
         }
-        
         command[1] = strdup("-c");
         if (!command[1]) {
             perror("strdup failed");
@@ -1252,7 +1048,6 @@ void run_memory_cpu_test() {
             free(config.fs_config.root_path);
             continue;
         }
-        
         command[2] = strdup(cmd_buffer);
         if (!command[2]) {
             perror("strdup failed");
@@ -1263,30 +1058,19 @@ void run_memory_cpu_test() {
             free(config.fs_config.root_path);
             continue;
         }
-        
         command[3] = nullptr;
-        
         config.command = command;
         config.command_argc = 3;
-        
         if (container_manager_run(&cm, &config) == 0) {
             set_color(COLOR_GREEN);
             printf("  ✓ Created %s with memory limit: %s\n", container_id, format_bytes(memory_fractions[i]).c_str());
             reset_color();
-            
-            // صبر می‌کنیم تا child process command را بخواند
-            // execvp command array را می‌خواند، پس باید کمی صبر کنیم
-            usleep(100000); // 100ms
+            usleep(100000);
         } else {
             set_color(COLOR_RED);
             printf("  ✗ Failed to create %s\n", container_id);
             reset_color();
         }
-        
-        // Free allocated memory
-        // container_manager_create یک کپی از command می‌سازد (strdup)
-        // اما child process از command اصلی استفاده می‌کند تا execvp را فراخوانی کند
-        // پس باید صبر کنیم تا child process command را بخواند
         if (command) {
             for (int j = 0; j < 3; j++) {
                 if (command[j]) {
@@ -1295,7 +1079,6 @@ void run_memory_cpu_test() {
             }
             free(command);
         }
-        
         if (config.id) {
             free(config.id);
             config.id = nullptr;
@@ -1305,14 +1088,11 @@ void run_memory_cpu_test() {
             config.fs_config.root_path = nullptr;
         }
     }
-    
-    // ایجاد کانتینرهای CPU
     for (int i = 0; i < 3; i++) {
         container_config_t config;
         namespace_config_init(&config.ns_config);
         resource_limits_init(&config.res_limits);
         fs_config_init(&config.fs_config);
-        
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "C%dCPU", i + 1);
         config.id = strdup(container_id);
@@ -1320,9 +1100,8 @@ void run_memory_cpu_test() {
             perror("strdup failed");
             continue;
         }
-        
-        config.res_limits.memory.limit_bytes = 128 * 1024 * 1024; // 128 MB پیش‌فرض
-        config.res_limits.cpu.shares = 1024; // CPU shares پیش‌فرض
+        config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
+        config.res_limits.cpu.shares = 1024;
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.quota_us = cpu_quotas[i];
         config.fs_config.root_path = strdup("/");
@@ -1331,9 +1110,6 @@ void run_memory_cpu_test() {
             free(config.id);
             continue;
         }
-        
-        // دستور برای مصرف CPU
-        // تخصیص حافظه برای command array
         char **command = static_cast<char**>(calloc(4, sizeof(char*)));
         if (!command) {
             perror("calloc failed");
@@ -1341,7 +1117,6 @@ void run_memory_cpu_test() {
             free(config.fs_config.root_path);
             continue;
         }
-        
         command[0] = strdup("/bin/sh");
         if (!command[0]) {
             perror("strdup failed");
@@ -1350,7 +1125,6 @@ void run_memory_cpu_test() {
             free(config.fs_config.root_path);
             continue;
         }
-        
         command[1] = strdup("-c");
         if (!command[1]) {
             perror("strdup failed");
@@ -1360,7 +1134,6 @@ void run_memory_cpu_test() {
             free(config.fs_config.root_path);
             continue;
         }
-        
         command[2] = strdup("while true; do :; done");
         if (!command[2]) {
             perror("strdup failed");
@@ -1371,32 +1144,21 @@ void run_memory_cpu_test() {
             free(config.fs_config.root_path);
             continue;
         }
-        
         command[3] = nullptr;
-        
         config.command = command;
         config.command_argc = 3;
-        
         if (container_manager_run(&cm, &config) == 0) {
             set_color(COLOR_GREEN);
             double cpu_percent = (cpu_quotas[i] * 100.0) / cpu_period_us;
-            printf("  ✓ Created %s with CPU limit: %.2f%% (quota: %d, period: %d)\n", 
+            printf("  ✓ Created %s with CPU limit: %.2f%% (quota: %d, period: %d)\n",
                    container_id, cpu_percent, cpu_quotas[i], cpu_period_us);
             reset_color();
-            
-            // صبر می‌کنیم تا child process command را بخواند
-            // execvp command array را می‌خواند، پس باید کمی صبر کنیم
-            usleep(100000); // 100ms
+            usleep(100000);
         } else {
             set_color(COLOR_RED);
             printf("  ✗ Failed to create %s\n", container_id);
             reset_color();
         }
-        
-        // Free allocated memory
-        // container_manager_create یک کپی از command می‌سازد (strdup)
-        // اما child process از command اصلی استفاده می‌کند تا execvp را فراخوانی کند
-        // پس باید صبر کنیم تا child process command را بخواند
         if (command) {
             for (int j = 0; j < 3; j++) {
                 if (command[j]) {
@@ -1405,7 +1167,6 @@ void run_memory_cpu_test() {
             }
             free(command);
         }
-        
         if (config.id) {
             free(config.id);
             config.id = nullptr;
@@ -1415,7 +1176,6 @@ void run_memory_cpu_test() {
             config.fs_config.root_path = nullptr;
         }
     }
-    
     printf("\n");
     set_color(COLOR_YELLOW);
     printf("Test containers created successfully!\n");
@@ -1423,13 +1183,11 @@ void run_memory_cpu_test() {
     printf("Press Enter to continue...");
     getchar();
 }
-
 void init_containers() {
     time_t base_time = time(nullptr);
     int counter = 0;
     const int runtime_seconds = 600;
     char cmd_buffer[512];
-    
     const unsigned long memory_limit = 128 * 1024 * 1024;
     const int cpu_quota_us = 5000;
     const int cpu_period_us = 100000;
@@ -1438,7 +1196,6 @@ void init_containers() {
         namespace_config_init(&config.ns_config);
         resource_limits_init(&config.res_limits);
         fs_config_init(&config.fs_config);
-        
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "cpu_intensive_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
@@ -1447,7 +1204,6 @@ void init_containers() {
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
         config.fs_config.root_path = strdup("/");
-        
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -1456,20 +1212,16 @@ void init_containers() {
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
-        
         container_manager_run(&cm, &config);
-        
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
         free(config.fs_config.root_path);
     }
-    
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
         resource_limits_init(&config.res_limits);
         fs_config_init(&config.fs_config);
-        
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "ram_intensive_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
@@ -1478,7 +1230,6 @@ void init_containers() {
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
         config.fs_config.root_path = strdup("/");
-        
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -1487,20 +1238,16 @@ void init_containers() {
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
-        
         container_manager_run(&cm, &config);
-        
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
         free(config.fs_config.root_path);
     }
-    
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
         resource_limits_init(&config.res_limits);
         fs_config_init(&config.fs_config);
-        
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "cpu_ram_heavy_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
@@ -1509,7 +1256,6 @@ void init_containers() {
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
         config.fs_config.root_path = strdup("/");
-        
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -1518,20 +1264,16 @@ void init_containers() {
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
-        
         container_manager_run(&cm, &config);
-        
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
         free(config.fs_config.root_path);
     }
-    
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
         resource_limits_init(&config.res_limits);
         fs_config_init(&config.fs_config);
-        
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "cpu_calc_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
@@ -1540,7 +1282,6 @@ void init_containers() {
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
         config.fs_config.root_path = strdup("/");
-        
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -1549,20 +1290,16 @@ void init_containers() {
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
-        
         container_manager_run(&cm, &config);
-        
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
         free(config.fs_config.root_path);
     }
-    
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
         resource_limits_init(&config.res_limits);
         fs_config_init(&config.fs_config);
-        
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "mem_stress_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
@@ -1571,7 +1308,6 @@ void init_containers() {
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
         config.fs_config.root_path = strdup("/");
-        
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -1580,20 +1316,16 @@ void init_containers() {
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
-        
         container_manager_run(&cm, &config);
-        
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
         free(config.fs_config.root_path);
     }
-    
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
         resource_limits_init(&config.res_limits);
         fs_config_init(&config.fs_config);
-        
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "mixed_workload_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
@@ -1602,7 +1334,6 @@ void init_containers() {
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
         config.fs_config.root_path = strdup("/");
-        
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -1611,20 +1342,16 @@ void init_containers() {
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
-        
         container_manager_run(&cm, &config);
-        
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
         free(config.fs_config.root_path);
     }
-    
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
         resource_limits_init(&config.res_limits);
         fs_config_init(&config.fs_config);
-        
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "high_cpu_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
@@ -1633,7 +1360,6 @@ void init_containers() {
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
         config.fs_config.root_path = strdup("/");
-        
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -1642,20 +1368,16 @@ void init_containers() {
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
-        
         container_manager_run(&cm, &config);
-        
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
         free(config.fs_config.root_path);
     }
-    
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
         resource_limits_init(&config.res_limits);
         fs_config_init(&config.fs_config);
-        
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "high_mem_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
@@ -1664,7 +1386,6 @@ void init_containers() {
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
         config.fs_config.root_path = strdup("/");
-        
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -1673,20 +1394,16 @@ void init_containers() {
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
-        
         container_manager_run(&cm, &config);
-        
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
         free(config.fs_config.root_path);
     }
-    
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
         resource_limits_init(&config.res_limits);
         fs_config_init(&config.fs_config);
-        
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "balanced_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
@@ -1695,7 +1412,6 @@ void init_containers() {
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
         config.fs_config.root_path = strdup("/");
-        
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -1704,20 +1420,16 @@ void init_containers() {
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
-        
         container_manager_run(&cm, &config);
-        
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
         free(config.fs_config.root_path);
     }
-    
     {
         container_config_t config;
         namespace_config_init(&config.ns_config);
         resource_limits_init(&config.res_limits);
         fs_config_init(&config.fs_config);
-        
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "max_stress_%ld_%d", base_time, counter++);
         config.id = strdup(container_id);
@@ -1726,7 +1438,6 @@ void init_containers() {
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.shares = 512;
         config.fs_config.root_path = strdup("/");
-        
         vector<char*> args;
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -1735,42 +1446,33 @@ void init_containers() {
         args.push_back(nullptr);
         config.command = args.data();
         config.command_argc = 3;
-        
         container_manager_run(&cm, &config);
-        
         for (auto arg : args) if (arg) free(arg);
         free(config.id);
         free(config.fs_config.root_path);
     }
-    
 }
-
 void signal_handler(int signum) {
     (void)signum;
     running = false;
     monitor_mode = false;
     show_cursor();
-    
     printf("\n\n");
     set_color(COLOR_YELLOW);
     printf("Shutting down... Stopping all containers...\n");
     reset_color();
-    
     int count;
     container_info_t** containers = container_manager_list(&cm, &count);
-    
-    // اول همه کانتینرهای RUNNING را kill و stop می‌کنیم
     for (int i = 0; i < count; i++) {
         if (containers[i]->state == CONTAINER_RUNNING) {
             char cgroup_procs_path[512];
             if (cm.rm->version == CGROUP_V2) {
-                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path),
                          "/sys/fs/cgroup/%s_%s/cgroup.procs", cm.rm->cgroup_path, containers[i]->id);
             } else {
-                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path),
                          "/sys/fs/cgroup/cpu,cpuacct/%s_%s/tasks", cm.rm->cgroup_path, containers[i]->id);
             }
-            
             FILE *fp = fopen(cgroup_procs_path, "r");
             if (fp) {
                 pid_t pid;
@@ -1783,30 +1485,23 @@ void signal_handler(int signum) {
             }
         }
     }
-    
-    // کمی صبر می‌کنیم تا processes به صورت graceful terminate شوند
-    usleep(500000); // 0.5 second
-    
-    // حالا همه کانتینرهای RUNNING را stop می‌کنیم
+    usleep(500000);
     for (int i = 0; i < count; i++) {
         if (containers[i]->state == CONTAINER_RUNNING) {
             container_manager_stop(&cm, containers[i]->id);
         }
     }
-    
-    // اگر هنوز process هایی باقی مانده باشند، آنها را kill می‌کنیم
     sleep(1);
     for (int i = 0; i < count; i++) {
         if (containers[i]->state == CONTAINER_RUNNING || containers[i]->pid > 0) {
             char cgroup_procs_path[512];
             if (cm.rm->version == CGROUP_V2) {
-                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path),
                          "/sys/fs/cgroup/%s_%s/cgroup.procs", cm.rm->cgroup_path, containers[i]->id);
             } else {
-                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path),
                          "/sys/fs/cgroup/cpu,cpuacct/%s_%s/tasks", cm.rm->cgroup_path, containers[i]->id);
             }
-            
             FILE *fp = fopen(cgroup_procs_path, "r");
             if (fp) {
                 pid_t pid;
@@ -1817,45 +1512,33 @@ void signal_handler(int signum) {
                 }
                 fclose(fp);
             }
-            
-            // اگر هنوز RUNNING است، دوباره stop می‌کنیم
             if (containers[i]->state == CONTAINER_RUNNING) {
                 container_manager_stop(&cm, containers[i]->id);
             }
         }
     }
-    
-    // اطمینان حاصل می‌کنیم که همه کانتینرها به حالت STOPPED رفته‌اند
-    // (کانتینرهای CREATED هم باید به STOPPED بروند)
     containers = container_manager_list(&cm, &count);
     for (int i = 0; i < count; i++) {
         if (containers[i]->state == CONTAINER_CREATED || containers[i]->state == CONTAINER_RUNNING) {
-            // اگر کانتینر CREATED است، فقط state را تغییر می‌دهیم
             if (containers[i]->state == CONTAINER_CREATED) {
                 containers[i]->state = CONTAINER_STOPPED;
                 containers[i]->stopped_at = time(nullptr);
             } else if (containers[i]->state == CONTAINER_RUNNING) {
-                // اگر هنوز RUNNING است، دوباره stop می‌کنیم
                 container_manager_stop(&cm, containers[i]->id);
             }
         }
     }
-    
     if (web_server) {
         web_server->stop();
         delete web_server;
         web_server = nullptr;
     }
-    
     container_manager_cleanup(&cm);
-    
     set_color(COLOR_GREEN);
     printf("All containers stopped. Exiting...\n");
     reset_color();
-    
     exit(0);
 }
-
 void interactive_menu() {
     struct termios old_term, new_term;
     tcgetattr(STDIN_FILENO, &old_term);
@@ -1863,12 +1546,9 @@ void interactive_menu() {
     new_term.c_lflag &= ~(ICANON | ECHO);
     new_term.c_cc[VMIN] = 0;
     new_term.c_cc[VTIME] = 0;
-    
     hide_cursor();
-    
     while (running) {
         clear_screen();
-        
         display_compact_monitor();
         set_color(COLOR_BOLD);
         set_color(COLOR_CYAN);
@@ -1883,24 +1563,18 @@ void interactive_menu() {
         printf("Select option (auto-refresh every 5 seconds): ");
         reset_color();
         fflush(stdout);
-        
         tcsetattr(STDIN_FILENO, TCSANOW, &new_term);
-        
         char choice = 0;
         fd_set readfds;
         struct timeval timeout;
-        
         FD_ZERO(&readfds);
         FD_SET(STDIN_FILENO, &readfds);
         timeout.tv_sec = 5;
         timeout.tv_usec = 0;
-        
         int select_result = select(STDIN_FILENO + 1, &readfds, nullptr, nullptr, &timeout);
-        
         if (select_result > 0 && FD_ISSET(STDIN_FILENO, &readfds)) {
             if (read(STDIN_FILENO, &choice, 1) > 0) {
                 int option = choice - '0';
-                
                 tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
                 show_cursor();
                 switch (option) {
@@ -1929,13 +1603,11 @@ void interactive_menu() {
                             if (len > 0 && id[len-1] == '\n') {
                                 id[len-1] = '\0';
                             }
-                            
                             char *start = id;
                             while (*start == ' ' || *start == '\t') start++;
                             char *end = id + strlen(id) - 1;
                             while (end > start && (*end == ' ' || *end == '\t')) end--;
                             *(end + 1) = '\0';
-                            
                             if (strlen(start) > 0) {
                                 char cmd_stop[] = "stop";
                                 char* argv[] = {cmd_stop, start, nullptr};
@@ -1959,15 +1631,12 @@ void interactive_menu() {
                             if (len > 0 && id[len-1] == '\n') {
                                 id[len-1] = '\0';
                             }
-                            
                             char *start = id;
                             while (*start == ' ' || *start == '\t') start++;
                             char *end = id + strlen(id) - 1;
                             while (end > start && (*end == ' ' || *end == '\t')) end--;
                             *(end + 1) = '\0';
-                            
                             if (strlen(start) > 0) {
-                                
                                 container_info_t *info = container_manager_get_info(&cm, start);
                                 if (info) {
                                     char cmd_destroy[] = "destroy";
@@ -1985,7 +1654,6 @@ void interactive_menu() {
                             }
                             printf("\nPress Enter to continue...");
                             fflush(stdout);
-                            
                             int c;
                             while ((c = getchar()) != '\n' && c != EOF);
                         }
@@ -2019,13 +1687,11 @@ void interactive_menu() {
                             if (len > 0 && id[len-1] == '\n') {
                                 id[len-1] = '\0';
                             }
-                            
                             char *start = id;
                             while (*start == ' ' || *start == '\t') start++;
                             char *end = id + strlen(id) - 1;
                             while (end > start && (*end == ' ' || *end == '\t')) end--;
                             *(end + 1) = '\0';
-                            
                             if (strlen(start) > 0) {
                                 container_info_t *info = container_manager_get_info(&cm, start);
                                 if (info) {
@@ -2045,14 +1711,12 @@ void interactive_menu() {
                                     if (info->stopped_at > 0) {
                                         printf("Stopped: %s", ctime(&info->stopped_at));
                                     }
-                                    
                                     if (info->state == CONTAINER_RUNNING) {
                                         unsigned long cpu_usage = 0, memory_usage = 0;
                                         resource_manager_get_stats(cm.rm, start, &cpu_usage, &memory_usage);
                                         printf("CPU Usage: %lu nanoseconds\n", cpu_usage);
                                         printf("Memory Usage: %lu bytes\n", memory_usage);
                                     }
-                                    
                                     printf("\n");
                                     printf("Options:\n");
                                     if (info->state == CONTAINER_RUNNING) {
@@ -2063,7 +1727,6 @@ void interactive_menu() {
                                     printf("0. Back\n");
                                     printf("\nSelect option: ");
                                     fflush(stdout);
-                                    
                                     char option[10];
                                     if (fgets(option, sizeof(option), stdin)) {
                                         int opt = atoi(option);
@@ -2106,13 +1769,11 @@ void interactive_menu() {
                             if (len > 0 && id[len-1] == '\n') {
                                 id[len-1] = '\0';
                             }
-                            
                             char *start = id;
                             while (*start == ' ' || *start == '\t') start++;
                             char *end = id + strlen(id) - 1;
                             while (end > start && (*end == ' ' || *end == '\t')) end--;
                             *(end + 1) = '\0';
-                            
                             if (strlen(start) > 0) {
                                 container_info_t *info = container_manager_get_info(&cm, start);
                                 if (info) {
@@ -2142,7 +1803,6 @@ void interactive_menu() {
                         break;
                     }
                     case 0: {
-                        
                         int count;
                         container_info_t **containers = container_manager_list(&cm, &count);
                         int stopped_count = 0;
@@ -2168,17 +1828,14 @@ void interactive_menu() {
                     default:
                         break;
                 }
-                
                 tcsetattr(STDIN_FILENO, TCSANOW, &new_term);
                 hide_cursor();
             }
         }
     }
-    
     tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
     show_cursor();
 }
-
 int main(int argc, char *argv[])
 {
     if (container_manager_init(&cm, 10000) != 0)
@@ -2186,17 +1843,14 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Failed to initialize container manager\n");
         return EXIT_FAILURE;
     }
-
     if (getuid() != 0)
     {
         fprintf(stderr, "Warning: container operations typically require root privileges\n");
     }
-
     web_server = new SimpleWebServer(&cm, 808);
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     web_server->start();
-
     if (argc < 2)
     {
         interactive_menu();
@@ -2207,10 +1861,8 @@ int main(int argc, char *argv[])
         container_manager_cleanup(&cm);
         return EXIT_SUCCESS;
     }
-
     const char *command = argv[1];
     int result = EXIT_FAILURE;
-
     if (strcmp(command, "run") == 0)
     {
         result = handle_run(argc - 1, &argv[1]);
@@ -2265,7 +1917,6 @@ int main(int argc, char *argv[])
         print_usage(argv[0]);
         result = EXIT_FAILURE;
     }
-
     if (strcmp(command, "run") != 0) {
         if (web_server) {
             web_server->stop();
@@ -2274,6 +1925,5 @@ int main(int argc, char *argv[])
         }
         container_manager_cleanup(&cm);
     }
-    
     return result;
 }
