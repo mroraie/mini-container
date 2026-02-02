@@ -17,10 +17,11 @@ using namespace std;
 #define CPU_CPUACCT_CGROUP_PATH CGROUP_ROOT "/cpu,cpuacct"
 #define MEMORY_CGROUP_PATH CGROUP_ROOT "/memory"
 #define BUF_SIZE 512
-#define DEBUG_LOG(rm, fmt, ...) do { \
-    (void)(rm); \
-    (void)(fmt); \
-} while(0)
+#define DEBUG_LOG(rm, fmt, ...) \
+    do { \
+        fprintf(stderr, "[DEBUG] %s:%d [resource_manager] " fmt, __FILE__, __LINE__, ##__VA_ARGS__); \
+        fflush(stderr); \
+    } while(0)
 static int find_cpuacct_usage_path(resource_manager_t *rm, const char *container_id, char *path, size_t path_size) {
     snprintf(path, path_size, "%s/%s_%s/cpuacct.usage", CPU_CPUACCT_CGROUP_PATH, rm->cgroup_path, container_id);
     if (access(path, R_OK) == 0) {
@@ -470,13 +471,14 @@ int resource_manager_get_stats(resource_manager_t *rm,
         if (rm->version == CGROUP_V2) {
             snprintf(path, sizeof(path), "%s/%s_%s/memory.current", CGROUP_ROOT, rm->cgroup_path, container_id);
             DEBUG_LOG(rm, "Debug: Attempting to read memory.current from %s\n", path);
+            DEBUG_LOG(rm, "Debug: File exists: %s\n", access(path, F_OK) == 0 ? "yes" : "no");
             if (read_file(path, buffer, sizeof(buffer), rm) == 0) {
-                DEBUG_LOG(rm, "Debug: Successfully read memory.current, content: '%s'\n", buffer);
+                DEBUG_LOG(rm, "Debug: Successfully read memory.current, content: '%s' (length: %zu)\n", buffer, strlen(buffer));
                 char *endptr;
                 unsigned long val = strtoul(buffer, &endptr, 10);
                 if (endptr != buffer && (*endptr == '\0' || *endptr == '\n' || *endptr == ' ')) {
                     *memory_usage = val;
-                    DEBUG_LOG(rm, "Debug: Parsed memory usage: %lu bytes\n", val);
+                    DEBUG_LOG(rm, "Debug: Parsed memory usage: %lu bytes (%.2f MB)\n", val, val / (1024.0 * 1024.0));
                 } else {
                     DEBUG_LOG(rm, "Debug: Failed to parse memory usage from %s: '%s' (endptr='%s')\n", path, buffer, endptr);
                 }
@@ -487,12 +489,12 @@ int resource_manager_get_stats(resource_manager_t *rm,
             snprintf(path, sizeof(path), "%s/%s_%s/memory.usage_in_bytes", MEMORY_CGROUP_PATH, rm->cgroup_path, container_id);
             DEBUG_LOG(rm, "Debug: Reading memory from %s (exists: %s)\n", path, access(path, F_OK) == 0 ? "yes" : "no");
             if (read_file(path, buffer, sizeof(buffer), rm) == 0) {
-                DEBUG_LOG(rm, "Debug: Read from memory.usage_in_bytes: '%s'\n", buffer);
+                DEBUG_LOG(rm, "Debug: Read from memory.usage_in_bytes: '%s' (length: %zu)\n", buffer, strlen(buffer));
                 char *endptr;
                 unsigned long val = strtoul(buffer, &endptr, 10);
                 if (endptr != buffer && (*endptr == '\0' || *endptr == '\n' || *endptr == ' ')) {
                     *memory_usage = val;
-                    DEBUG_LOG(rm, "Debug: Parsed memory usage: %lu bytes\n", val);
+                    DEBUG_LOG(rm, "Debug: Parsed memory usage: %lu bytes (%.2f MB)\n", val, val / (1024.0 * 1024.0));
                 } else {
                     DEBUG_LOG(rm, "Debug: Failed to parse memory usage from %s: '%s' (endptr='%s')\n", path, buffer, endptr);
                 }
