@@ -409,7 +409,11 @@ double calculate_cpu_percent(unsigned long cpu_ns, time_t start_time) {
     long elapsed = now - start_time;
     if (elapsed <= 0) return 0.0;
     double cpu_seconds = cpu_ns / 1e9;
-    return (cpu_seconds / elapsed) * 100.0;
+    int cpu_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    if (cpu_cores <= 0) cpu_cores = 1;
+    double percent = (cpu_seconds / elapsed) * 100.0 / cpu_cores;
+    if (percent > 100.0) percent = 100.0;
+    return percent;
 }
 void display_compact_monitor() {
     int count;
