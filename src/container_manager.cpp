@@ -76,6 +76,9 @@ static int add_container(container_manager_t *cm, container_info_t *info) {
     return 0;
 }
 
+// Forward declaration
+static void free_container_config(container_config_t *config);
+
 static void remove_container(container_manager_t *cm, const char *container_id) {
     for (int i = 0; i < cm->container_count; i++) {
         if (strcmp(cm->containers[i]->id, container_id) == 0) {
