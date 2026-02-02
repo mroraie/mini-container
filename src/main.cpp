@@ -9,6 +9,8 @@
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <sys/select.h>
+#include <sys/sysinfo.h>
+#include <fstream>
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -1127,6 +1129,201 @@ void run_tests() {
     getchar();
 }
 
+// تابع برای گرفتن کل مموری سیستم (به بایت)
+static unsigned long get_total_system_memory() {
+    struct sysinfo info;
+    if (sysinfo(&info) == 0) {
+        return info.totalram * info.mem_unit;
+    }
+    
+    // Fallback: خواندن از /proc/meminfo
+    FILE *fp = fopen("/proc/meminfo", "r");
+    if (fp) {
+        char line[256];
+        while (fgets(line, sizeof(line), fp)) {
+            if (strncmp(line, "MemTotal:", 9) == 0) {
+                unsigned long mem_kb = 0;
+                if (sscanf(line, "MemTotal: %lu kB", &mem_kb) == 1) {
+                    fclose(fp);
+                    return mem_kb * 1024; // تبدیل به بایت
+                }
+            }
+        }
+        fclose(fp);
+    }
+    
+    // Fallback: 4GB به صورت پیش‌فرض
+    return 4ULL * 1024 * 1024 * 1024;
+}
+
+// تابع برای گرفتن تعداد CPU ها
+static int get_cpu_count() {
+    return sysconf(_SC_NPROCESSORS_ONLN);
+}
+
+void run_memory_cpu_test() {
+    clear_screen();
+    set_color(COLOR_BOLD);
+    set_color(COLOR_CYAN);
+    printf("Memory and CPU Test\n");
+    reset_color();
+    
+    unsigned long total_memory = get_total_system_memory();
+    int cpu_count = get_cpu_count();
+    
+    printf("\nSystem Information:\n");
+    printf("  Total Memory: %s\n", format_bytes(total_memory).c_str());
+    printf("  CPU Cores: %d\n", cpu_count);
+    
+    printf("\nCreating test containers...\n");
+    
+    // ایجاد 3 کانتینر برای تست مموری: 1/16, 1/8, 1/4
+    unsigned long memory_fractions[] = {
+        total_memory / 16,  // 1/16
+        total_memory / 8,   // 1/8
+        total_memory / 4    // 1/4
+    };
+    
+    // ایجاد 3 کانتینر برای تست CPU با quota/period
+    // برای محدود کردن CPU به 1/16, 1/8, 1/4 از quota_us و period_us استفاده می‌کنیم
+    // period_us = 100000 (100ms)
+    // quota_us برای 1/16 = 6250, برای 1/8 = 12500, برای 1/4 = 25000
+    int cpu_period_us = 100000;
+    int cpu_quotas[] = {
+        6250,   // 1/16 CPU
+        12500,  // 1/8 CPU
+        25000   // 1/4 CPU
+    };
+    
+    // ایجاد کانتینرهای مموری
+    for (int i = 0; i < 3; i++) {
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+        snprintf(container_id, sizeof(container_id), "C%dMEM", i + 1);
+        config.id = strdup(container_id);
+        if (!config.id) {
+            perror("strdup failed");
+            continue;
+        }
+        
+        config.res_limits.memory.limit_bytes = memory_fractions[i];
+        config.res_limits.cpu.shares = 1024; // CPU shares پیش‌فرض
+        config.fs_config.root_path = strdup("/");
+        if (!config.fs_config.root_path) {
+            perror("strdup failed");
+            free(config.id);
+            continue;
+        }
+        
+        // دستور برای مصرف مموری
+        vector<char*> args;
+        char cmd_buffer[512];
+        snprintf(cmd_buffer, sizeof(cmd_buffer), 
+                 "python3 -c 'import time; data = [bytearray(%lu) for _ in range(1)]; time.sleep(3600)'",
+                 memory_fractions[i] / 2); // استفاده از نصف مموری برای اطمینان
+        
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup(cmd_buffer));
+        args.push_back(nullptr);
+        
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            set_color(COLOR_GREEN);
+            printf("  ✓ Created %s with memory limit: %s\n", container_id, format_bytes(memory_fractions[i]).c_str());
+            reset_color();
+        } else {
+            set_color(COLOR_RED);
+            printf("  ✗ Failed to create %s\n", container_id);
+            reset_color();
+        }
+        
+        // Free allocated memory
+        for (auto arg : args) {
+            if (arg) free(arg);
+        }
+        if (config.id) {
+            free(config.id);
+        }
+        if (config.fs_config.root_path) {
+            free(config.fs_config.root_path);
+        }
+    }
+    
+    // ایجاد کانتینرهای CPU
+    for (int i = 0; i < 3; i++) {
+        container_config_t config;
+        namespace_config_init(&config.ns_config);
+        resource_limits_init(&config.res_limits);
+        fs_config_init(&config.fs_config);
+        
+        char container_id[64];
+        snprintf(container_id, sizeof(container_id), "C%dCPU", i + 1);
+        config.id = strdup(container_id);
+        if (!config.id) {
+            perror("strdup failed");
+            continue;
+        }
+        
+        config.res_limits.memory.limit_bytes = 128 * 1024 * 1024; // 128 MB پیش‌فرض
+        config.res_limits.cpu.shares = 1024; // CPU shares پیش‌فرض
+        config.res_limits.cpu.period_us = cpu_period_us;
+        config.res_limits.cpu.quota_us = cpu_quotas[i];
+        config.fs_config.root_path = strdup("/");
+        if (!config.fs_config.root_path) {
+            perror("strdup failed");
+            free(config.id);
+            continue;
+        }
+        
+        // دستور برای مصرف CPU
+        vector<char*> args;
+        args.push_back(strdup("/bin/sh"));
+        args.push_back(strdup("-c"));
+        args.push_back(strdup("while true; do :; done"));
+        args.push_back(nullptr);
+        
+        config.command = args.data();
+        config.command_argc = 3;
+        
+        if (container_manager_run(&cm, &config) == 0) {
+            set_color(COLOR_GREEN);
+            double cpu_percent = (cpu_quotas[i] * 100.0) / cpu_period_us;
+            printf("  ✓ Created %s with CPU limit: %.2f%% (quota: %d, period: %d)\n", 
+                   container_id, cpu_percent, cpu_quotas[i], cpu_period_us);
+            reset_color();
+        } else {
+            set_color(COLOR_RED);
+            printf("  ✗ Failed to create %s\n", container_id);
+            reset_color();
+        }
+        
+        // Free allocated memory
+        for (auto arg : args) {
+            if (arg) free(arg);
+        }
+        if (config.id) {
+            free(config.id);
+        }
+        if (config.fs_config.root_path) {
+            free(config.fs_config.root_path);
+        }
+    }
+    
+    printf("\n");
+    set_color(COLOR_YELLOW);
+    printf("Test containers created successfully!\n");
+    reset_color();
+    printf("Press Enter to continue...");
+    getchar();
+}
+
 void init_containers() {
     time_t base_time = time(nullptr);
     int counter = 0;
@@ -1454,10 +1651,53 @@ void signal_handler(int signum) {
     monitor_mode = false;
     show_cursor();
     
+    printf("\n\n");
+    set_color(COLOR_YELLOW);
+    printf("Shutting down... Stopping all containers...\n");
+    reset_color();
+    
     int count;
     container_info_t** containers = container_manager_list(&cm, &count);
+    
+    // اول همه کانتینرهای RUNNING را kill و stop می‌کنیم
     for (int i = 0; i < count; i++) {
         if (containers[i]->state == CONTAINER_RUNNING) {
+            char cgroup_procs_path[512];
+            if (cm.rm->version == CGROUP_V2) {
+                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                         "/sys/fs/cgroup/%s_%s/cgroup.procs", cm.rm->cgroup_path, containers[i]->id);
+            } else {
+                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                         "/sys/fs/cgroup/cpu,cpuacct/%s_%s/tasks", cm.rm->cgroup_path, containers[i]->id);
+            }
+            
+            FILE *fp = fopen(cgroup_procs_path, "r");
+            if (fp) {
+                pid_t pid;
+                while (fscanf(fp, "%d", &pid) == 1) {
+                    if (pid > 0) {
+                        kill(pid, SIGTERM);
+                    }
+                }
+                fclose(fp);
+            }
+        }
+    }
+    
+    // کمی صبر می‌کنیم تا processes به صورت graceful terminate شوند
+    usleep(500000); // 0.5 second
+    
+    // حالا همه کانتینرهای RUNNING را stop می‌کنیم
+    for (int i = 0; i < count; i++) {
+        if (containers[i]->state == CONTAINER_RUNNING) {
+            container_manager_stop(&cm, containers[i]->id);
+        }
+    }
+    
+    // اگر هنوز process هایی باقی مانده باشند، آنها را kill می‌کنیم
+    sleep(1);
+    for (int i = 0; i < count; i++) {
+        if (containers[i]->state == CONTAINER_RUNNING || containers[i]->pid > 0) {
             char cgroup_procs_path[512];
             if (cm.rm->version == CGROUP_V2) {
                 snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
@@ -1478,31 +1718,26 @@ void signal_handler(int signum) {
                 fclose(fp);
             }
             
-            container_manager_stop(&cm, containers[i]->id);
+            // اگر هنوز RUNNING است، دوباره stop می‌کنیم
+            if (containers[i]->state == CONTAINER_RUNNING) {
+                container_manager_stop(&cm, containers[i]->id);
+            }
         }
     }
     
-    sleep(2);
-    
+    // اطمینان حاصل می‌کنیم که همه کانتینرها به حالت STOPPED رفته‌اند
+    // (کانتینرهای CREATED هم باید به STOPPED بروند)
+    containers = container_manager_list(&cm, &count);
     for (int i = 0; i < count; i++) {
-        char cgroup_procs_path[512];
-        if (cm.rm->version == CGROUP_V2) {
-            snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
-                     "/sys/fs/cgroup/%s_%s/cgroup.procs", cm.rm->cgroup_path, containers[i]->id);
-        } else {
-            snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
-                     "/sys/fs/cgroup/cpu,cpuacct/%s_%s/tasks", cm.rm->cgroup_path, containers[i]->id);
-        }
-        
-        FILE *fp = fopen(cgroup_procs_path, "r");
-        if (fp) {
-            pid_t pid;
-            while (fscanf(fp, "%d", &pid) == 1) {
-                if (pid > 0) {
-                    kill(pid, SIGKILL);
-                }
+        if (containers[i]->state == CONTAINER_CREATED || containers[i]->state == CONTAINER_RUNNING) {
+            // اگر کانتینر CREATED است، فقط state را تغییر می‌دهیم
+            if (containers[i]->state == CONTAINER_CREATED) {
+                containers[i]->state = CONTAINER_STOPPED;
+                containers[i]->stopped_at = time(nullptr);
+            } else if (containers[i]->state == CONTAINER_RUNNING) {
+                // اگر هنوز RUNNING است، دوباره stop می‌کنیم
+                container_manager_stop(&cm, containers[i]->id);
             }
-            fclose(fp);
         }
     }
     
@@ -1513,6 +1748,10 @@ void signal_handler(int signum) {
     }
     
     container_manager_cleanup(&cm);
+    
+    set_color(COLOR_GREEN);
+    printf("All containers stopped. Exiting...\n");
+    reset_color();
     
     exit(0);
 }
@@ -1537,7 +1776,8 @@ void interactive_menu() {
         reset_color();
         printf("1. Create Container         2. Full Monitor (htop)     3. List Containers\n");
         printf("4. Stop Container           5. Destroy Container        6. Container Info\n");
-        printf("7. Edit Container           8. Start Container          0. Exit\n");
+        printf("7. Edit Container           8. Start Container          9. Memory/CPU Test\n");
+        printf("0. Exit\n");
         printf("\n");
         set_color(COLOR_YELLOW);
         printf("Select option (auto-refresh every 5 seconds): ");
@@ -1794,6 +2034,11 @@ void interactive_menu() {
                             int c;
                             while ((c = getchar()) != '\n' && c != EOF);
                         }
+                        break;
+                    }
+                    case 9: {
+                        clear_screen();
+                        run_memory_cpu_test();
                         break;
                     }
                     case 0: {
