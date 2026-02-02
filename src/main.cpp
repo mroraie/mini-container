@@ -107,6 +107,7 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
     int c;
 
     config->id = nullptr;
+    config->fs_config.root_path = nullptr;
     *detach = 0;
     namespace_config_init(&config->ns_config);
     resource_limits_init(&config->res_limits);
@@ -118,6 +119,10 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
         {
         case 'h':
             print_usage(argv[0]);
+            if (config->fs_config.root_path) {
+                free(config->fs_config.root_path);
+                config->fs_config.root_path = nullptr;
+            }
             return -1;
 
         case 'm':
@@ -129,7 +134,14 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
             break;
 
         case 'r':
+            if (config->fs_config.root_path) {
+                free(config->fs_config.root_path);
+            }
             config->fs_config.root_path = strdup(optarg);
+            if (!config->fs_config.root_path) {
+                perror("strdup failed");
+                return -1;
+            }
             break;
 
         case 'd':
@@ -138,6 +150,10 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
 
         default:
             fprintf(stderr, "Unknown option: %c\n", c);
+            if (config->fs_config.root_path) {
+                free(config->fs_config.root_path);
+                config->fs_config.root_path = nullptr;
+            }
             return -1;
         }
     }
@@ -145,6 +161,10 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
     if (optind >= argc)
     {
         fprintf(stderr, "Error: no command specified\n");
+        if (config->fs_config.root_path) {
+            free(config->fs_config.root_path);
+            config->fs_config.root_path = nullptr;
+        }
         return -1;
     }
 
@@ -154,6 +174,10 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
     if (!config->fs_config.root_path)
     {
         config->fs_config.root_path = strdup("/");
+        if (!config->fs_config.root_path) {
+            perror("strdup failed");
+            return -1;
+        }
     }
 
     return 0;
@@ -172,6 +196,15 @@ static int handle_run(int argc, char *argv[])
     if (container_manager_run(&cm, &config) != 0)
     {
         fprintf(stderr, "Failed to run container\n");
+        // Free allocated memory on error
+        if (config.id) {
+            free(config.id);
+            config.id = nullptr;
+        }
+        if (config.fs_config.root_path) {
+            free(config.fs_config.root_path);
+            config.fs_config.root_path = nullptr;
+        }
         return EXIT_FAILURE;
     }
 
@@ -197,8 +230,15 @@ static int handle_run(int argc, char *argv[])
         }
     }
 
-    free(config.id);
-    free(config.fs_config.root_path);
+    // Free allocated memory (config.id may have been allocated by container_manager_run)
+    if (config.id) {
+        free(config.id);
+        config.id = nullptr;
+    }
+    if (config.fs_config.root_path) {
+        free(config.fs_config.root_path);
+        config.fs_config.root_path = nullptr;
+    }
 
     return EXIT_SUCCESS;
 }
@@ -807,7 +847,16 @@ void interactive_create_container() {
             }
         } else if (c == ' ' && !in_quotes) {
             if (!current_arg.empty()) {
-                args.push_back(strdup(current_arg.c_str()));
+                char *arg = strdup(current_arg.c_str());
+                if (!arg) {
+                    perror("strdup failed");
+                    // Free already allocated args
+                    for (auto a : args) {
+                        if (a) free(a);
+                    }
+                    return;
+                }
+                args.push_back(arg);
                 current_arg.clear();
             }
         } else {
@@ -816,15 +865,33 @@ void interactive_create_container() {
     }
     
     if (!current_arg.empty()) {
-        args.push_back(strdup(current_arg.c_str()));
+        char *arg = strdup(current_arg.c_str());
+        if (!arg) {
+            perror("strdup failed");
+            // Free already allocated args
+            for (auto a : args) {
+                if (a) free(a);
+            }
+            return;
+        }
+        args.push_back(arg);
     }
     args.push_back(nullptr);
     
     container_config_t config;
+    config.id = nullptr;
+    config.fs_config.root_path = nullptr;
+    
     if (strlen(container_name) > 0) {
         config.id = strdup(container_name);
-    } else {
-        config.id = nullptr;
+        if (!config.id) {
+            perror("strdup failed for container name");
+            // Free already allocated args
+            for (auto arg : args) {
+                if (arg) free(arg);
+            }
+            return;
+        }
     }
     namespace_config_init(&config.ns_config);
     resource_limits_init(&config.res_limits);
@@ -833,6 +900,18 @@ void interactive_create_container() {
     config.res_limits.memory.limit_bytes = memory * 1024 * 1024;
     config.res_limits.cpu.shares = cpu;
     config.fs_config.root_path = strdup(root_path);
+    if (!config.fs_config.root_path) {
+        perror("strdup failed for root path");
+        // Free already allocated memory
+        for (auto arg : args) {
+            if (arg) free(arg);
+        }
+        if (config.id) {
+            free(config.id);
+            config.id = nullptr;
+        }
+        return;
+    }
     config.command = args.data();
     config.command_argc = args.size() - 1;
     
@@ -854,11 +933,18 @@ void interactive_create_container() {
         }
     }
     
+    // Free allocated memory
     for (auto arg : args) {
         if (arg) free(arg);
     }
-    if (config.id) free(config.id);
-    if (config.fs_config.root_path) free(config.fs_config.root_path);
+    if (config.id) {
+        free(config.id);
+        config.id = nullptr;
+    }
+    if (config.fs_config.root_path) {
+        free(config.fs_config.root_path);
+        config.fs_config.root_path = nullptr;
+    }
     
     printf("\nPress Enter to continue...");
     getchar();
