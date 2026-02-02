@@ -775,6 +775,13 @@ int container_manager_run(container_manager_t *cm, container_config_t *config) {
         return -1;
     }
 
+    // پیدا کردن container_info برای استفاده از saved_config
+    container_info_t *info = find_container(cm, config->id);
+    if (!info || !info->saved_config) {
+        container_manager_destroy(cm, config->id);
+        return -1;
+    }
+
     struct cgroup_callback_data {
         resource_manager_t *rm;
         const char *container_id;
@@ -790,9 +797,10 @@ int container_manager_run(container_manager_t *cm, container_config_t *config) {
         resource_manager_add_process(data->rm, data->container_id, pid);
     };
 
-    pid_t pid = namespace_create_container_with_cgroup(&config->ns_config,
-                                                      config->command,
-                                                      config->command_argc,
+    // استفاده از saved_config->command که کپی شده است و در memory باقی می‌ماند
+    pid_t pid = namespace_create_container_with_cgroup(&info->saved_config->ns_config,
+                                                      info->saved_config->command,
+                                                      info->saved_config->command_argc,
                                                       add_to_cgroup,
                                                       &callback_data);
 
@@ -801,7 +809,6 @@ int container_manager_run(container_manager_t *cm, container_config_t *config) {
         return -1;
     }
 
-    container_info_t *info = find_container(cm, config->id);
     if (info) {
         info->pid = pid;
         info->state = CONTAINER_RUNNING;

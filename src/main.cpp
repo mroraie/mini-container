@@ -1273,6 +1273,10 @@ void run_memory_cpu_test() {
             set_color(COLOR_GREEN);
             printf("  ✓ Created %s with memory limit: %s\n", container_id, format_bytes(memory_fractions[i]).c_str());
             reset_color();
+            
+            // صبر می‌کنیم تا child process command را بخواند
+            // execvp command array را می‌خواند، پس باید کمی صبر کنیم
+            usleep(100000); // 100ms
         } else {
             set_color(COLOR_RED);
             printf("  ✗ Failed to create %s\n", container_id);
@@ -1280,7 +1284,9 @@ void run_memory_cpu_test() {
         }
         
         // Free allocated memory
-        // container_manager_create یک کپی از command می‌سازد (strdup)، پس می‌توانیم command را free کنیم
+        // container_manager_create یک کپی از command می‌سازد (strdup)
+        // اما child process از command اصلی استفاده می‌کند تا execvp را فراخوانی کند
+        // پس باید صبر کنیم تا child process command را بخواند
         if (command) {
             for (int j = 0; j < 3; j++) {
                 if (command[j]) {
@@ -1377,6 +1383,10 @@ void run_memory_cpu_test() {
             printf("  ✓ Created %s with CPU limit: %.2f%% (quota: %d, period: %d)\n", 
                    container_id, cpu_percent, cpu_quotas[i], cpu_period_us);
             reset_color();
+            
+            // صبر می‌کنیم تا child process command را بخواند
+            // execvp command array را می‌خواند، پس باید کمی صبر کنیم
+            usleep(100000); // 100ms
         } else {
             set_color(COLOR_RED);
             printf("  ✗ Failed to create %s\n", container_id);
@@ -1384,7 +1394,9 @@ void run_memory_cpu_test() {
         }
         
         // Free allocated memory
-        // container_manager_create یک کپی از command می‌سازد (strdup)، پس می‌توانیم command را free کنیم
+        // container_manager_create یک کپی از command می‌سازد (strdup)
+        // اما child process از command اصلی استفاده می‌کند تا execvp را فراخوانی کند
+        // پس باید صبر کنیم تا child process command را بخواند
         if (command) {
             for (int j = 0; j < 3; j++) {
                 if (command[j]) {
