@@ -89,10 +89,14 @@ static int copy_file(const char *src, const char *dst) {
     return (bytes_read == -1) ? -1 : 0;
 }
 void fs_config_init(fs_config_t *config) {
-    if (!config) return;
+    if (!config) {
+        fprintf(stderr, "[ERROR] fs_config_init: config is NULL\n");
+        return;
+    }
     config->root_path = nullptr;
     config->method = FS_CHROOT;
     config->create_minimal_fs = 0;
+    fprintf(stderr, "[DEBUG] fs_config_init: initialized, root_path=%p\n", (void*)config->root_path);
 }
 int fs_create_minimal_root(const char *root_path) {
     if (!root_path) {

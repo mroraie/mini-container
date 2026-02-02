@@ -104,48 +104,113 @@ static int is_pid_alive(pid_t pid) {
     return (errno == ESRCH) ? 0 : 1;
 }
 static container_config_t* copy_container_config(const container_config_t *src) {
-    if (!src) return nullptr;
-    container_config_t *dst = static_cast<container_config_t*>(calloc(1, sizeof(container_config_t)));
-    if (!dst) {
+    fprintf(stderr, "[DEBUG] copy_container_config: called with src=%p\n", (void*)src);
+    fflush(stderr);
+    if (!src) {
+        ERROR_LOG("copy_container_config: src is NULL");
         return nullptr;
     }
+    fprintf(stderr, "[DEBUG] copy_container_config: src->id=%p, src->root_path=%p, src->command=%p, src->command_argc=%d\n",
+            (void*)src->id, (void*)src->root_path, (void*)src->command, src->command_argc);
+    fflush(stderr);
+    fprintf(stderr, "[DEBUG] copy_container_config: About to access src->fs_config\n");
+    fflush(stderr);
+    fprintf(stderr, "[DEBUG] copy_container_config: src->fs_config address: %p\n", (void*)&src->fs_config);
+    fflush(stderr);
+    fprintf(stderr, "[DEBUG] copy_container_config: About to access src->fs_config.root_path\n");
+    fflush(stderr);
+    fprintf(stderr, "[DEBUG] copy_container_config: src->fs_config.root_path=%p\n", (void*)src->fs_config.root_path);
+    fflush(stderr);
+    DEBUG_LOG("copy_container_config: Allocating dst");
+    container_config_t *dst = static_cast<container_config_t*>(calloc(1, sizeof(container_config_t)));
+    if (!dst) {
+        ERROR_LOG("copy_container_config: calloc failed for dst");
+        return nullptr;
+    }
+    DEBUG_LOG("copy_container_config: dst allocated: %p", (void*)dst);
     if (src->id) {
+        DEBUG_LOG("copy_container_config: Copying id: %s", src->id);
         dst->id = strdup(src->id);
         if (!dst->id) {
+            ERROR_LOG("copy_container_config: strdup failed for id");
             free(dst);
             return nullptr;
         }
+        DEBUG_LOG("copy_container_config: id copied successfully");
     }
     if (src->root_path) {
+        DEBUG_LOG("copy_container_config: Copying root_path: %s", src->root_path);
         dst->root_path = strdup(src->root_path);
         if (!dst->root_path) {
+            ERROR_LOG("copy_container_config: strdup failed for root_path");
             free_container_config(dst);
             return nullptr;
         }
+        DEBUG_LOG("copy_container_config: root_path copied successfully");
     }
+    DEBUG_LOG("copy_container_config: Copying ns_config");
     dst->ns_config = src->ns_config;
+    DEBUG_LOG("copy_container_config: Copying res_limits");
     dst->res_limits = src->res_limits;
-    dst->fs_config = src->fs_config;
+    DEBUG_LOG("copy_container_config: About to copy fs_config");
+    DEBUG_LOG("copy_container_config: src->fs_config.root_path pointer: %p", (void*)src->fs_config.root_path);
     if (src->fs_config.root_path) {
+        DEBUG_LOG("copy_container_config: src->fs_config.root_path value: %s", src->fs_config.root_path);
+    }
+    DEBUG_LOG("copy_container_config: About to copy fs_config struct");
+    DEBUG_LOG("copy_container_config: src->fs_config address: %p", (void*)&src->fs_config);
+    DEBUG_LOG("copy_container_config: dst->fs_config address: %p", (void*)&dst->fs_config);
+    DEBUG_LOG("copy_container_config: src->fs_config.root_path pointer: %p", (void*)src->fs_config.root_path);
+    DEBUG_LOG("copy_container_config: src->fs_config.method: %d", src->fs_config.method);
+    DEBUG_LOG("copy_container_config: src->fs_config.create_minimal_fs: %d", src->fs_config.create_minimal_fs);
+    fflush(stderr);
+    DEBUG_LOG("copy_container_config: Copying fs_config struct (memcpy)");
+    fflush(stderr);
+    memcpy(&dst->fs_config, &src->fs_config, sizeof(fs_config_t));
+    fflush(stderr);
+    DEBUG_LOG("copy_container_config: fs_config struct copied");
+    fflush(stderr);
+    DEBUG_LOG("copy_container_config: dst->fs_config.root_path after copy: %p", (void*)dst->fs_config.root_path);
+    fflush(stderr);
+    if (src->fs_config.root_path) {
+        DEBUG_LOG("copy_container_config: About to strdup fs_config.root_path: %s", src->fs_config.root_path);
+        fflush(stderr);
         dst->fs_config.root_path = strdup(src->fs_config.root_path);
+        fflush(stderr);
         if (!dst->fs_config.root_path) {
+            ERROR_LOG("copy_container_config: strdup failed for fs_config.root_path");
             free_container_config(dst);
             return nullptr;
         }
+        DEBUG_LOG("copy_container_config: fs_config.root_path copied successfully: %s", dst->fs_config.root_path);
+    } else {
+        DEBUG_LOG("copy_container_config: src->fs_config.root_path is NULL, skipping");
+        dst->fs_config.root_path = nullptr;
     }
+    DEBUG_LOG("copy_container_config: About to copy command array");
+    fflush(stderr);
     if (src->command && src->command_argc > 0) {
         DEBUG_LOG("copy_container_config: Copying command array, argc=%d", src->command_argc);
+        fflush(stderr);
         dst->command_argc = src->command_argc;
+        DEBUG_LOG("copy_container_config: About to calloc command array");
+        fflush(stderr);
         dst->command = static_cast<char**>(calloc(src->command_argc + 1, sizeof(char*)));
         if (!dst->command) {
             ERROR_LOG("copy_container_config: calloc failed for command array");
             free_container_config(dst);
             return nullptr;
         }
+        DEBUG_LOG("copy_container_config: command array allocated: %p", (void*)dst->command);
+        fflush(stderr);
         for (int i = 0; i < src->command_argc; i++) {
+            DEBUG_LOG("copy_container_config: Processing command[%d]", i);
+            fflush(stderr);
             if (src->command[i]) {
                 DEBUG_LOG("copy_container_config: Copying command[%d] = %s", i, src->command[i]);
+                fflush(stderr);
                 dst->command[i] = strdup(src->command[i]);
+                fflush(stderr);
                 if (!dst->command[i]) {
                     ERROR_LOG("copy_container_config: strdup failed for command[%d]", i);
                     for (int j = 0; j < i; j++) {
@@ -156,17 +221,23 @@ static container_config_t* copy_container_config(const container_config_t *src) 
                     return nullptr;
                 }
                 DEBUG_LOG("copy_container_config: Copied command[%d] = %s (dst=%p)", i, dst->command[i], (void*)dst->command[i]);
+                fflush(stderr);
             } else {
+                DEBUG_LOG("copy_container_config: command[%d] is NULL", i);
                 dst->command[i] = nullptr;
             }
         }
         dst->command[src->command_argc] = nullptr;
         DEBUG_LOG("copy_container_config: Command array copied successfully");
+        fflush(stderr);
     } else {
         DEBUG_LOG("copy_container_config: No command to copy");
         dst->command = nullptr;
         dst->command_argc = 0;
+        fflush(stderr);
     }
+    DEBUG_LOG("copy_container_config: About to return dst=%p", (void*)dst);
+    fflush(stderr);
     return dst;
 }
 static void free_container_config(container_config_t *config) {
@@ -402,8 +473,21 @@ int container_manager_create(container_manager_t *cm,
     info->state = CONTAINER_CREATED;
     info->created_at = time(nullptr);
     info->pid = 0;
+    DEBUG_LOG("About to call copy_container_config");
+    DEBUG_LOG("config address: %p", (void*)config);
+    DEBUG_LOG("config->fs_config address: %p", (void*)&config->fs_config);
+    DEBUG_LOG("config->fs_config.root_path address: %p", (void*)&config->fs_config.root_path);
+    DEBUG_LOG("config->fs_config.root_path value: %p", (void*)config->fs_config.root_path);
+    if (config->fs_config.root_path) {
+        DEBUG_LOG("config->fs_config.root_path string: %s", config->fs_config.root_path);
+    }
+    fflush(stderr);
     DEBUG_LOG("Calling copy_container_config");
+    fflush(stderr);
     info->saved_config = copy_container_config(config);
+    fflush(stderr);
+    DEBUG_LOG("copy_container_config returned: %p", (void*)info->saved_config);
+    fflush(stderr);
     if (!info->saved_config) {
         ERROR_LOG("copy_container_config returned NULL");
         fprintf(stderr, "Failed to copy container configuration\n");

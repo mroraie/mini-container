@@ -1021,46 +1021,66 @@ void run_memory_cpu_test() {
     for (int i = 0; i < 3; i++) {
         DEBUG_LOG("Creating memory container %d", i + 1);
         container_config_t config;
+        DEBUG_LOG("Initializing config structures");
         namespace_config_init(&config.ns_config);
+        DEBUG_LOG("namespace_config_init done");
         resource_limits_init(&config.res_limits);
+        DEBUG_LOG("resource_limits_init done");
         fs_config_init(&config.fs_config);
+        DEBUG_LOG("fs_config_init done, fs_config.root_path=%p", (void*)config.fs_config.root_path);
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "C%dMEM", i + 1);
         DEBUG_LOG("Container ID: %s", container_id);
         config.id = strdup(container_id);
         if (!config.id) {
+            ERROR_LOG("strdup failed for container_id");
             perror("strdup failed");
             continue;
         }
+        DEBUG_LOG("config.id set to: %s", config.id);
         config.res_limits.memory.limit_bytes = memory_fractions[i];
         config.res_limits.cpu.shares = 1024;
+        DEBUG_LOG("About to strdup fs_config.root_path");
         config.fs_config.root_path = strdup("/");
+        DEBUG_LOG("strdup done, fs_config.root_path=%p", (void*)config.fs_config.root_path);
         if (!config.fs_config.root_path) {
+            ERROR_LOG("strdup failed for fs_config.root_path");
             perror("strdup failed");
             free(config.id);
             continue;
         }
+        DEBUG_LOG("fs_config.root_path set to: %s", config.fs_config.root_path);
+        DEBUG_LOG("About to prepare cmd_buffer");
         char cmd_buffer[512];
         snprintf(cmd_buffer, sizeof(cmd_buffer),
                  "python3 -c 'import time; data = [bytearray(%lu) for _ in range(1)]; time.sleep(3600)'",
                  memory_fractions[i] / 2);
+        DEBUG_LOG("cmd_buffer prepared: %s", cmd_buffer);
+        DEBUG_LOG("About to allocate command array");
         char **command = static_cast<char**>(calloc(4, sizeof(char*)));
         if (!command) {
+            ERROR_LOG("calloc failed for command array");
             perror("calloc failed");
             free(config.id);
             free(config.fs_config.root_path);
             continue;
         }
+        DEBUG_LOG("command array allocated: %p", (void*)command);
+        DEBUG_LOG("About to strdup /bin/sh");
         command[0] = strdup("/bin/sh");
         if (!command[0]) {
+            ERROR_LOG("strdup failed for /bin/sh");
             perror("strdup failed");
             free(command);
             free(config.id);
             free(config.fs_config.root_path);
             continue;
         }
+        DEBUG_LOG("command[0] set to: %s", command[0]);
+        DEBUG_LOG("About to strdup -c");
         command[1] = strdup("-c");
         if (!command[1]) {
+            ERROR_LOG("strdup failed for -c");
             perror("strdup failed");
             free(command[0]);
             free(command);
@@ -1068,8 +1088,11 @@ void run_memory_cpu_test() {
             free(config.fs_config.root_path);
             continue;
         }
+        DEBUG_LOG("command[1] set to: %s", command[1]);
+        DEBUG_LOG("About to strdup cmd_buffer");
         command[2] = strdup(cmd_buffer);
         if (!command[2]) {
+            ERROR_LOG("strdup failed for cmd_buffer");
             perror("strdup failed");
             free(command[0]);
             free(command[1]);
@@ -1078,9 +1101,23 @@ void run_memory_cpu_test() {
             free(config.fs_config.root_path);
             continue;
         }
+        DEBUG_LOG("command[2] set to: %s", command[2]);
         command[3] = nullptr;
+        DEBUG_LOG("Setting config.command and config.command_argc");
         config.command = command;
         config.command_argc = 3;
+        DEBUG_LOG("config.command=%p, config.command_argc=%d", (void*)config.command, config.command_argc);
+        DEBUG_LOG("config.fs_config.root_path before call: %p (%s)", 
+                  (void*)config.fs_config.root_path, 
+                  config.fs_config.root_path ? config.fs_config.root_path : "NULL");
+        DEBUG_LOG("config.fs_config.method: %d", config.fs_config.method);
+        DEBUG_LOG("config.fs_config.create_minimal_fs: %d", config.fs_config.create_minimal_fs);
+        DEBUG_LOG("About to call container_manager_run, config address: %p", (void*)&config);
+        DEBUG_LOG("config.fs_config address: %p", (void*)&config.fs_config);
+        DEBUG_LOG("config.fs_config.root_path address: %p", (void*)&config.fs_config.root_path);
+        fflush(stderr);
+        DEBUG_LOG("Calling container_manager_run");
+        fflush(stderr);
         if (container_manager_run(&cm, &config) == 0) {
             set_color(COLOR_GREEN);
             printf("  ✓ Created %s with memory limit: %s\n", container_id, format_bytes(memory_fractions[i]).c_str());
