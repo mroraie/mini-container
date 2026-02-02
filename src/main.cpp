@@ -168,7 +168,7 @@ static int parse_run_options(int argc, char *argv[], container_config_t *config,
         if (!config->fs_config.root_path) {
             perror("strdup failed");
             return -1;
-        }
+    }
     }
     return 0;
 }
@@ -215,11 +215,11 @@ static int handle_run(int argc, char *argv[])
         }
     }
     if (config.id) {
-        free(config.id);
+    free(config.id);
         config.id = nullptr;
     }
     if (config.fs_config.root_path) {
-        free(config.fs_config.root_path);
+    free(config.fs_config.root_path);
         config.fs_config.root_path = nullptr;
     }
     return EXIT_SUCCESS;
@@ -619,7 +619,7 @@ void display_monitor() {
             }
         }
         tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
-        usleep(5000000);
+        usleep(5000000); 
     }
     show_cursor();
     clear_screen();
@@ -632,7 +632,7 @@ void interactive_create_container() {
     reset_color();
     char command[1024];
     char container_name[256] = "";
-    char root_path[512] = "/";
+    char root_path[512] = "/";  
     int memory = 128;
     int cpu = 1024;
     printf("\n");
@@ -854,7 +854,7 @@ void run_tests() {
         printf("\n[Test 1] CPU Usage Test...\n");
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
-        config.fs_config.root_path = strdup("/");
+        config.fs_config.root_path = strdup("/");  
         args.clear();
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -884,7 +884,7 @@ void run_tests() {
         config.id = container_id;
         config.res_limits.memory.limit_bytes = 64 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
-        config.fs_config.root_path = strdup("/");
+        config.fs_config.root_path = strdup("/");  
         args.clear();
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -913,7 +913,7 @@ void run_tests() {
         config.id = container_id;
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 512;
-        config.fs_config.root_path = strdup("/");
+        config.fs_config.root_path = strdup("/");  
         args.clear();
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -942,7 +942,7 @@ void run_tests() {
         config.id = container_id;
         config.res_limits.memory.limit_bytes = 128 * 1024 * 1024;
         config.res_limits.cpu.shares = 1024;
-        config.fs_config.root_path = strdup("/");
+        config.fs_config.root_path = strdup("/");  
         args.clear();
         args.push_back(strdup("/bin/sh"));
         args.push_back(strdup("-c"));
@@ -1040,8 +1040,10 @@ void run_memory_cpu_test() {
         DEBUG_LOG("config.id set to: %s", config.id);
         config.res_limits.memory.limit_bytes = memory_fractions[i];
         config.res_limits.cpu.shares = 1024;
-        DEBUG_LOG("About to strdup fs_config.root_path");
-        config.fs_config.root_path = strdup("/");
+        char root_path[256];
+        snprintf(root_path, sizeof(root_path), "/tmp/mini_container_test_%s", container_id);
+        DEBUG_LOG("About to strdup fs_config.root_path: %s", root_path);
+        config.fs_config.root_path = strdup(root_path);
         DEBUG_LOG("strdup done, fs_config.root_path=%p", (void*)config.fs_config.root_path);
         if (!config.fs_config.root_path) {
             ERROR_LOG("strdup failed for fs_config.root_path");
@@ -1050,6 +1052,8 @@ void run_memory_cpu_test() {
             continue;
         }
         DEBUG_LOG("fs_config.root_path set to: %s", config.fs_config.root_path);
+        config.fs_config.create_minimal_fs = 1;
+        DEBUG_LOG("fs_config.create_minimal_fs set to: %d", config.fs_config.create_minimal_fs);
         DEBUG_LOG("About to prepare cmd_buffer");
         char cmd_buffer[512];
         snprintf(cmd_buffer, sizeof(cmd_buffer),
@@ -1164,12 +1168,15 @@ void run_memory_cpu_test() {
         config.res_limits.cpu.shares = 1024;
         config.res_limits.cpu.period_us = cpu_period_us;
         config.res_limits.cpu.quota_us = cpu_quotas[i];
-        config.fs_config.root_path = strdup("/");
+        char root_path[256];
+        snprintf(root_path, sizeof(root_path), "/tmp/mini_container_test_%s", container_id);
+        config.fs_config.root_path = strdup(root_path);
         if (!config.fs_config.root_path) {
             perror("strdup failed");
             free(config.id);
             continue;
         }
+        config.fs_config.create_minimal_fs = 1;
         char **command = static_cast<char**>(calloc(4, sizeof(char*)));
         if (!command) {
             perror("calloc failed");
@@ -1535,10 +1542,10 @@ void signal_handler(int signum) {
         if (containers[i]->state == CONTAINER_RUNNING) {
             char cgroup_procs_path[512];
             if (cm.rm->version == CGROUP_V2) {
-                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path),
+                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
                          "/sys/fs/cgroup/%s_%s/cgroup.procs", cm.rm->cgroup_path, containers[i]->id);
             } else {
-                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path),
+                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
                          "/sys/fs/cgroup/cpu,cpuacct/%s_%s/tasks", cm.rm->cgroup_path, containers[i]->id);
             }
             FILE *fp = fopen(cgroup_procs_path, "r");
@@ -1562,24 +1569,24 @@ void signal_handler(int signum) {
     sleep(1);
     for (int i = 0; i < count; i++) {
         if (containers[i]->state == CONTAINER_RUNNING || containers[i]->pid > 0) {
-            char cgroup_procs_path[512];
-            if (cm.rm->version == CGROUP_V2) {
-                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path),
-                         "/sys/fs/cgroup/%s_%s/cgroup.procs", cm.rm->cgroup_path, containers[i]->id);
-            } else {
-                snprintf(cgroup_procs_path, sizeof(cgroup_procs_path),
-                         "/sys/fs/cgroup/cpu,cpuacct/%s_%s/tasks", cm.rm->cgroup_path, containers[i]->id);
-            }
-            FILE *fp = fopen(cgroup_procs_path, "r");
-            if (fp) {
-                pid_t pid;
-                while (fscanf(fp, "%d", &pid) == 1) {
-                    if (pid > 0) {
-                        kill(pid, SIGKILL);
-                    }
+        char cgroup_procs_path[512];
+        if (cm.rm->version == CGROUP_V2) {
+            snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                     "/sys/fs/cgroup/%s_%s/cgroup.procs", cm.rm->cgroup_path, containers[i]->id);
+        } else {
+            snprintf(cgroup_procs_path, sizeof(cgroup_procs_path), 
+                     "/sys/fs/cgroup/cpu,cpuacct/%s_%s/tasks", cm.rm->cgroup_path, containers[i]->id);
+        }
+        FILE *fp = fopen(cgroup_procs_path, "r");
+        if (fp) {
+            pid_t pid;
+            while (fscanf(fp, "%d", &pid) == 1) {
+                if (pid > 0) {
+                    kill(pid, SIGKILL);
                 }
-                fclose(fp);
             }
+            fclose(fp);
+        }
             if (containers[i]->state == CONTAINER_RUNNING) {
                 container_manager_stop(&cm, containers[i]->id);
             }

@@ -191,6 +191,16 @@ static container_config_t* copy_container_config(const container_config_t *src) 
     fflush(stderr);
     if (src->command && src->command_argc > 0) {
         DEBUG_LOG("copy_container_config: Copying command array, argc=%d", src->command_argc);
+        DEBUG_LOG("copy_container_config: src->command pointer: %p", (void*)src->command);
+        fflush(stderr);
+        for (int i = 0; i < src->command_argc; i++) {
+            DEBUG_LOG("copy_container_config: src->command[%d] = %p", i, (void*)src->command[i]);
+            if (src->command[i]) {
+                DEBUG_LOG("copy_container_config: src->command[%d] value: %s", i, src->command[i]);
+            } else {
+                DEBUG_LOG("copy_container_config: src->command[%d] is NULL", i);
+            }
+        }
         fflush(stderr);
         dst->command_argc = src->command_argc;
         DEBUG_LOG("copy_container_config: About to calloc command array");
@@ -206,15 +216,19 @@ static container_config_t* copy_container_config(const container_config_t *src) 
         for (int i = 0; i < src->command_argc; i++) {
             DEBUG_LOG("copy_container_config: Processing command[%d]", i);
             fflush(stderr);
-            if (src->command[i]) {
+            if (src->command && src->command[i]) {
                 DEBUG_LOG("copy_container_config: Copying command[%d] = %s", i, src->command[i]);
                 fflush(stderr);
+                errno = 0;
                 dst->command[i] = strdup(src->command[i]);
                 fflush(stderr);
                 if (!dst->command[i]) {
-                    ERROR_LOG("copy_container_config: strdup failed for command[%d]", i);
+                    ERROR_LOG("copy_container_config: strdup failed for command[%d], errno=%d", i, errno);
+                    perror("strdup failed");
                     for (int j = 0; j < i; j++) {
-                        free(dst->command[j]);
+                        if (dst->command[j]) {
+                            free(dst->command[j]);
+                        }
                     }
                     free(dst->command);
                     free_container_config(dst);
