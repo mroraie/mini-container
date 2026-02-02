@@ -62,17 +62,23 @@ static container_info_t *find_container(container_manager_t *cm, const char *con
     return nullptr;
 }
 static int add_container(container_manager_t *cm, container_info_t *info) {
+    DEBUG_LOG("add_container called: container_count=%d, max_containers=%d", cm->container_count, cm->max_containers);
     if (cm->container_count >= cm->max_containers) {
+        DEBUG_LOG("Reallocating containers array");
         size_t new_size = cm->max_containers * 2;
         container_info_t **new_containers = static_cast<container_info_t**>(realloc(cm->containers, new_size * sizeof(container_info_t *)));
         if (!new_containers) {
+            ERROR_LOG("realloc failed for containers array");
             fprintf(stderr, "Error: failed to reallocate containers array\n");
             return -1;
         }
+        DEBUG_LOG("realloc succeeded, new_size=%zu", new_size);
         cm->containers = new_containers;
         cm->max_containers = new_size;
     }
+    DEBUG_LOG("Adding container at index %d", cm->container_count);
     cm->containers[cm->container_count++] = info;
+    DEBUG_LOG("Container added successfully, new count=%d", cm->container_count);
     return 0;
 }
 static void free_container_config(container_config_t *config);
@@ -356,46 +362,71 @@ int container_manager_init(container_manager_t *cm, int max_containers) {
 }
 int container_manager_create(container_manager_t *cm,
                            const container_config_t *config) {
+    DEBUG_LOG("container_manager_create called");
     if (!cm || !config) {
+        ERROR_LOG("Invalid parameters: cm=%p, config=%p", (void*)cm, (void*)config);
         fprintf(stderr, "Error: invalid parameters\n");
         return -1;
     }
+    DEBUG_LOG("config->id=%p (%s)", (void*)config->id, config->id ? config->id : "NULL");
+    DEBUG_LOG("config->command=%p, config->command_argc=%d", (void*)config->command, config->command_argc);
+    if (config->command) {
+        for (int i = 0; i < config->command_argc; i++) {
+            DEBUG_LOG("config->command[%d] = %p (%s)", i, (void*)config->command[i],
+                      config->command[i] ? config->command[i] : "NULL");
+        }
+    }
     char *container_id = config->id ? strdup(config->id) : generate_container_id(cm);
     if (!container_id) {
+        ERROR_LOG("Failed to generate container ID");
         perror("failed to generate container ID");
         return -1;
     }
+    DEBUG_LOG("Container ID: %s", container_id);
     if (find_container(cm, container_id)) {
+        ERROR_LOG("Container %s already exists", container_id);
         fprintf(stderr, "Error: container %s already exists\n", container_id);
         free(container_id);
         return -1;
     }
+    DEBUG_LOG("Allocating container_info_t");
     container_info_t *info = static_cast<container_info_t*>(calloc(1, sizeof(container_info_t)));
     if (!info) {
+        ERROR_LOG("calloc failed for container_info_t");
         perror("calloc container info failed");
         free(container_id);
         return -1;
     }
+    DEBUG_LOG("container_info_t allocated: %p", (void*)info);
     info->id = container_id;
     info->state = CONTAINER_CREATED;
     info->created_at = time(nullptr);
     info->pid = 0;
+    DEBUG_LOG("Calling copy_container_config");
     info->saved_config = copy_container_config(config);
     if (!info->saved_config) {
+        ERROR_LOG("copy_container_config returned NULL");
         fprintf(stderr, "Failed to copy container configuration\n");
         free(info->id);
         free(info);
         return -1;
     }
+    DEBUG_LOG("copy_container_config succeeded, saved_config=%p", (void*)info->saved_config);
+    DEBUG_LOG("Calling resource_manager_create_cgroup");
     if (resource_manager_create_cgroup(cm->rm, container_id, &config->res_limits) != 0) {
+        ERROR_LOG("resource_manager_create_cgroup failed");
         fprintf(stderr, "Failed to create resource cgroups\n");
         free_container_config(info->saved_config);
         free(info->id);
         free(info);
         return -1;
     }
+    DEBUG_LOG("resource_manager_create_cgroup succeeded");
+    DEBUG_LOG("Checking fs_config.create_minimal_fs: %d", config->fs_config.create_minimal_fs);
     if (config->fs_config.create_minimal_fs) {
+        DEBUG_LOG("Creating minimal root filesystem");
         if (fs_create_minimal_root(config->fs_config.root_path) != 0) {
+            ERROR_LOG("fs_create_minimal_root failed");
             fprintf(stderr, "Failed to create minimal root filesystem\n");
             resource_manager_destroy_cgroup(cm->rm, container_id);
             free_container_config(info->saved_config);
@@ -403,18 +434,26 @@ int container_manager_create(container_manager_t *cm,
             free(info);
             return -1;
         }
+        DEBUG_LOG("fs_create_minimal_root succeeded");
+        DEBUG_LOG("Populating container root");
         if (fs_populate_container_root(config->fs_config.root_path, "/") != 0) {
+            DEBUG_LOG("Warning: failed to populate container root");
             fprintf(stderr, "Warning: failed to populate container root\n");
         }
     }
+    DEBUG_LOG("Calling add_container");
     if (add_container(cm, info) != 0) {
+        ERROR_LOG("add_container failed");
         resource_manager_destroy_cgroup(cm->rm, container_id);
         free_container_config(info->saved_config);
         free(info->id);
         free(info);
         return -1;
     }
+    DEBUG_LOG("add_container succeeded");
+    DEBUG_LOG("Calling save_state");
     save_state(cm);
+    DEBUG_LOG("container_manager_create completed successfully");
     return 0;
 }
 int container_manager_start(container_manager_t *cm, const char *container_id) {
