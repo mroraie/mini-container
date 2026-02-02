@@ -64,6 +64,7 @@ static int write_file(const char *path, const char *value, resource_manager_t *r
     return 0;
 }
 static int read_file(const char *path, char *buffer, size_t size, resource_manager_t *rm = nullptr) {
+    (void)rm;
     int fd = open(path, O_RDONLY);
     if (fd == -1) {
         if (errno != ENOENT) {
