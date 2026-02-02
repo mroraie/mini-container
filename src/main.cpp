@@ -23,6 +23,18 @@ static container_manager_t cm;
 static bool running = true;
 static bool monitor_mode = false;
 static SimpleWebServer* web_server = nullptr;
+
+#define DEBUG_LOG(fmt, ...) \
+    do { \
+        fprintf(stderr, "[DEBUG] %s:%d [%s] " fmt "\n", __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+        fflush(stderr); \
+    } while(0)
+
+#define ERROR_LOG(fmt, ...) \
+    do { \
+        fprintf(stderr, "[ERROR] %s:%d [%s] " fmt "\n", __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+        fflush(stderr); \
+    } while(0)
 static const char *state_names[] = {
     [CONTAINER_CREATED] = "CREATED",
     [CONTAINER_RUNNING] = "RUNNING",
@@ -989,6 +1001,8 @@ void run_memory_cpu_test() {
     printf("  Total Memory: %s\n", format_bytes(total_memory).c_str());
     printf("  CPU Cores: %d\n", cpu_count);
     printf("\nCreating test containers...\n");
+    DEBUG_LOG("Starting memory/CPU test");
+    DEBUG_LOG("Total memory: %lu bytes, CPU cores: %d", total_memory, cpu_count);
     unsigned long memory_fractions[] = {
         total_memory / 16,
         total_memory / 8,
@@ -1001,19 +1015,21 @@ void run_memory_cpu_test() {
         25000
     };
     for (int i = 0; i < 3; i++) {
+        DEBUG_LOG("Creating memory container %d", i + 1);
         container_config_t config;
         namespace_config_init(&config.ns_config);
         resource_limits_init(&config.res_limits);
         fs_config_init(&config.fs_config);
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "C%dMEM", i + 1);
+        DEBUG_LOG("Container ID: %s", container_id);
         config.id = strdup(container_id);
         if (!config.id) {
             perror("strdup failed");
             continue;
         }
         config.res_limits.memory.limit_bytes = memory_fractions[i];
-        config.res_limits.cpu.shares = 1024; // CPU shares پیش‌فرض
+        config.res_limits.cpu.shares = 1024;
         config.fs_config.root_path = strdup("/");
         if (!config.fs_config.root_path) {
             perror("strdup failed");
@@ -1088,13 +1104,16 @@ void run_memory_cpu_test() {
             config.fs_config.root_path = nullptr;
         }
     }
+    DEBUG_LOG("Starting CPU containers creation");
     for (int i = 0; i < 3; i++) {
+        DEBUG_LOG("Creating CPU container %d", i + 1);
         container_config_t config;
         namespace_config_init(&config.ns_config);
         resource_limits_init(&config.res_limits);
         fs_config_init(&config.fs_config);
         char container_id[64];
         snprintf(container_id, sizeof(container_id), "C%dCPU", i + 1);
+        DEBUG_LOG("Container ID: %s", container_id);
         config.id = strdup(container_id);
         if (!config.id) {
             perror("strdup failed");
@@ -1147,7 +1166,13 @@ void run_memory_cpu_test() {
         command[3] = nullptr;
         config.command = command;
         config.command_argc = 3;
+        DEBUG_LOG("CPU Command array allocated: %p, argc: %d", (void*)command, config.command_argc);
+        DEBUG_LOG("CPU Command[0]: %s", command[0] ? command[0] : "NULL");
+        DEBUG_LOG("CPU Command[1]: %s", command[1] ? command[1] : "NULL");
+        DEBUG_LOG("CPU Command[2]: %s", command[2] ? command[2] : "NULL");
+        DEBUG_LOG("Calling container_manager_run for CPU container %s", container_id);
         if (container_manager_run(&cm, &config) == 0) {
+            DEBUG_LOG("container_manager_run succeeded for CPU container %s", container_id);
             set_color(COLOR_GREEN);
             double cpu_percent = (cpu_quotas[i] * 100.0) / cpu_period_us;
             printf("  ✓ Created %s with CPU limit: %.2f%% (quota: %d, period: %d)\n",
@@ -1155,10 +1180,12 @@ void run_memory_cpu_test() {
             reset_color();
             usleep(100000);
         } else {
+            ERROR_LOG("container_manager_run failed for CPU container %s", container_id);
             set_color(COLOR_RED);
             printf("  ✗ Failed to create %s\n", container_id);
             reset_color();
         }
+        DEBUG_LOG("Freeing CPU command array for %s", container_id);
         if (command) {
             for (int j = 0; j < 3; j++) {
                 if (command[j]) {

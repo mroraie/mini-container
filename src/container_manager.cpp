@@ -16,6 +16,18 @@ using namespace std;
 #define DEFAULT_MAX_CONTAINERS 10
 #define STATE_FILE_PATH "/var/run/mini-container/state.json"
 #define STATE_FILE_PATH_FALLBACK "/tmp/mini-container-state.json"
+
+#define DEBUG_LOG(fmt, ...) \
+    do { \
+        fprintf(stderr, "[DEBUG] %s:%d [%s] " fmt "\n", __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+        fflush(stderr); \
+    } while(0)
+
+#define ERROR_LOG(fmt, ...) \
+    do { \
+        fprintf(stderr, "[ERROR] %s:%d [%s] " fmt "\n", __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
+        fflush(stderr); \
+    } while(0)
 static int extract_numeric_id(const char *id) {
     if (!id) return -1;
     char *endptr;
@@ -116,16 +128,20 @@ static container_config_t* copy_container_config(const container_config_t *src) 
         }
     }
     if (src->command && src->command_argc > 0) {
+        DEBUG_LOG("copy_container_config: Copying command array, argc=%d", src->command_argc);
         dst->command_argc = src->command_argc;
         dst->command = static_cast<char**>(calloc(src->command_argc + 1, sizeof(char*)));
         if (!dst->command) {
+            ERROR_LOG("copy_container_config: calloc failed for command array");
             free_container_config(dst);
             return nullptr;
         }
         for (int i = 0; i < src->command_argc; i++) {
             if (src->command[i]) {
+                DEBUG_LOG("copy_container_config: Copying command[%d] = %s", i, src->command[i]);
                 dst->command[i] = strdup(src->command[i]);
                 if (!dst->command[i]) {
+                    ERROR_LOG("copy_container_config: strdup failed for command[%d]", i);
                     for (int j = 0; j < i; j++) {
                         free(dst->command[j]);
                     }
@@ -133,12 +149,15 @@ static container_config_t* copy_container_config(const container_config_t *src) 
                     free_container_config(dst);
                     return nullptr;
                 }
+                DEBUG_LOG("copy_container_config: Copied command[%d] = %s (dst=%p)", i, dst->command[i], (void*)dst->command[i]);
             } else {
                 dst->command[i] = nullptr;
             }
         }
         dst->command[src->command_argc] = nullptr;
+        DEBUG_LOG("copy_container_config: Command array copied successfully");
     } else {
+        DEBUG_LOG("copy_container_config: No command to copy");
         dst->command = nullptr;
         dst->command_argc = 0;
     }
@@ -607,22 +626,44 @@ void container_manager_cleanup(container_manager_t *cm) {
     }
 }
 int container_manager_run(container_manager_t *cm, container_config_t *config) {
+    DEBUG_LOG("container_manager_run called");
     if (!cm || !config) {
+        ERROR_LOG("Invalid parameters: cm=%p, config=%p", (void*)cm, (void*)config);
         return -1;
     }
+    DEBUG_LOG("Container ID: %s", config->id ? config->id : "NULL");
     if (!config->id) {
         config->id = generate_container_id(cm);
         if (!config->id) {
+            ERROR_LOG("Failed to generate container ID");
             return -1;
         }
     }
+    DEBUG_LOG("Calling container_manager_create");
     if (container_manager_create(cm, config) != 0) {
+        ERROR_LOG("container_manager_create failed");
         return -1;
     }
+    DEBUG_LOG("container_manager_create succeeded, finding container");
     container_info_t *info = find_container(cm, config->id);
     if (!info || !info->saved_config) {
+        ERROR_LOG("Container not found or saved_config is NULL: info=%p, saved_config=%p", 
+                  (void*)info, info ? (void*)info->saved_config : (void*)nullptr);
         container_manager_destroy(cm, config->id);
         return -1;
+    }
+    DEBUG_LOG("Found container, saved_config=%p", (void*)info->saved_config);
+    DEBUG_LOG("saved_config->command=%p, saved_config->command_argc=%d", 
+              (void*)info->saved_config->command, info->saved_config->command_argc);
+    if (!info->saved_config->command) {
+        ERROR_LOG("saved_config->command is NULL!");
+        container_manager_destroy(cm, config->id);
+        return -1;
+    }
+    for (int i = 0; i < info->saved_config->command_argc; i++) {
+        DEBUG_LOG("saved_config->command[%d] = %p (%s)", i, 
+                  (void*)info->saved_config->command[i],
+                  info->saved_config->command[i] ? info->saved_config->command[i] : "NULL");
     }
     struct cgroup_callback_data {
         resource_manager_t *rm;
@@ -636,12 +677,15 @@ int container_manager_run(container_manager_t *cm, container_config_t *config) {
         cgroup_callback_data *data = static_cast<cgroup_callback_data*>(user_data);
         resource_manager_add_process(data->rm, data->container_id, pid);
     };
+    DEBUG_LOG("Calling namespace_create_container_with_cgroup");
     pid_t pid = namespace_create_container_with_cgroup(&info->saved_config->ns_config,
                                                       info->saved_config->command,
                                                       info->saved_config->command_argc,
                                                       add_to_cgroup,
                                                       &callback_data);
+    DEBUG_LOG("namespace_create_container_with_cgroup returned pid=%d", pid);
     if (pid == -1) {
+        ERROR_LOG("namespace_create_container_with_cgroup failed");
         container_manager_destroy(cm, config->id);
         return -1;
     }
