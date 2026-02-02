@@ -1220,18 +1220,53 @@ void run_memory_cpu_test() {
         }
         
         // دستور برای مصرف مموری
-        vector<char*> args;
         char cmd_buffer[512];
         snprintf(cmd_buffer, sizeof(cmd_buffer), 
                  "python3 -c 'import time; data = [bytearray(%lu) for _ in range(1)]; time.sleep(3600)'",
                  memory_fractions[i] / 2); // استفاده از نصف مموری برای اطمینان
         
-        args.push_back(strdup("/bin/sh"));
-        args.push_back(strdup("-c"));
-        args.push_back(strdup(cmd_buffer));
-        args.push_back(nullptr);
+        // تخصیص حافظه برای command array
+        char **command = static_cast<char**>(calloc(4, sizeof(char*)));
+        if (!command) {
+            perror("calloc failed");
+            free(config.id);
+            free(config.fs_config.root_path);
+            continue;
+        }
         
-        config.command = args.data();
+        command[0] = strdup("/bin/sh");
+        if (!command[0]) {
+            perror("strdup failed");
+            free(command);
+            free(config.id);
+            free(config.fs_config.root_path);
+            continue;
+        }
+        
+        command[1] = strdup("-c");
+        if (!command[1]) {
+            perror("strdup failed");
+            free(command[0]);
+            free(command);
+            free(config.id);
+            free(config.fs_config.root_path);
+            continue;
+        }
+        
+        command[2] = strdup(cmd_buffer);
+        if (!command[2]) {
+            perror("strdup failed");
+            free(command[0]);
+            free(command[1]);
+            free(command);
+            free(config.id);
+            free(config.fs_config.root_path);
+            continue;
+        }
+        
+        command[3] = nullptr;
+        
+        config.command = command;
         config.command_argc = 3;
         
         if (container_manager_run(&cm, &config) == 0) {
@@ -1245,14 +1280,23 @@ void run_memory_cpu_test() {
         }
         
         // Free allocated memory
-        for (auto arg : args) {
-            if (arg) free(arg);
+        // container_manager_create یک کپی از command می‌سازد (strdup)، پس می‌توانیم command را free کنیم
+        if (command) {
+            for (int j = 0; j < 3; j++) {
+                if (command[j]) {
+                    free(command[j]);
+                }
+            }
+            free(command);
         }
+        
         if (config.id) {
             free(config.id);
+            config.id = nullptr;
         }
         if (config.fs_config.root_path) {
             free(config.fs_config.root_path);
+            config.fs_config.root_path = nullptr;
         }
     }
     
@@ -1283,13 +1327,48 @@ void run_memory_cpu_test() {
         }
         
         // دستور برای مصرف CPU
-        vector<char*> args;
-        args.push_back(strdup("/bin/sh"));
-        args.push_back(strdup("-c"));
-        args.push_back(strdup("while true; do :; done"));
-        args.push_back(nullptr);
+        // تخصیص حافظه برای command array
+        char **command = static_cast<char**>(calloc(4, sizeof(char*)));
+        if (!command) {
+            perror("calloc failed");
+            free(config.id);
+            free(config.fs_config.root_path);
+            continue;
+        }
         
-        config.command = args.data();
+        command[0] = strdup("/bin/sh");
+        if (!command[0]) {
+            perror("strdup failed");
+            free(command);
+            free(config.id);
+            free(config.fs_config.root_path);
+            continue;
+        }
+        
+        command[1] = strdup("-c");
+        if (!command[1]) {
+            perror("strdup failed");
+            free(command[0]);
+            free(command);
+            free(config.id);
+            free(config.fs_config.root_path);
+            continue;
+        }
+        
+        command[2] = strdup("while true; do :; done");
+        if (!command[2]) {
+            perror("strdup failed");
+            free(command[0]);
+            free(command[1]);
+            free(command);
+            free(config.id);
+            free(config.fs_config.root_path);
+            continue;
+        }
+        
+        command[3] = nullptr;
+        
+        config.command = command;
         config.command_argc = 3;
         
         if (container_manager_run(&cm, &config) == 0) {
@@ -1305,14 +1384,23 @@ void run_memory_cpu_test() {
         }
         
         // Free allocated memory
-        for (auto arg : args) {
-            if (arg) free(arg);
+        // container_manager_create یک کپی از command می‌سازد (strdup)، پس می‌توانیم command را free کنیم
+        if (command) {
+            for (int j = 0; j < 3; j++) {
+                if (command[j]) {
+                    free(command[j]);
+                }
+            }
+            free(command);
         }
+        
         if (config.id) {
             free(config.id);
+            config.id = nullptr;
         }
         if (config.fs_config.root_path) {
             free(config.fs_config.root_path);
+            config.fs_config.root_path = nullptr;
         }
     }
     
