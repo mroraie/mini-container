@@ -1,23 +1,23 @@
-# سیستم مینی کانتینر - مستندات API
+# Mini Container System - API Documentation
 
-## نمای کلی
+## Overview
 
-این مستندات API پیاده‌سازی سی‌پلاس‌پلاس سیستم مینی کانتینر را شامل می‌شود. جهت مطالعه فایل   [README](../README.md) را ابتدا مطالعه بفرمایید.
+This document describes the C/C++ API of the Mini Container system. Please read the [README](../README.md) first.
 
-## مدیریت کانتینتر ها (container manager)
+## Container Management (Container Manager)
 
-### مقداردهی اولیه و پاکسازی
+### Initialization and Cleanup
 
-```c++
+```cpp
 int container_manager_init(container_manager_t *cm, int max_containers);
 void container_manager_cleanup(container_manager_t *cm);
 ```
 
-مدیریت‌کننده کانتینر را با حداکثر تعداد کانتینرها مقداردهی کنید.
+Initializes the container manager with a maximum number of containers.
 
-### چرخه حیات کانتینر
+### Container Lifecycle
 
-```c++
+```cpp
 int container_manager_create(container_manager_t *cm, const container_config_t *config);
 int container_manager_run(container_manager_t *cm, container_config_t *config);
 int container_manager_start(container_manager_t *cm, const char *container_id);
@@ -25,72 +25,70 @@ int container_manager_stop(container_manager_t *cm, const char *container_id);
 int container_manager_destroy(container_manager_t *cm, const char *container_id);
 ```
 
-عملیات اساسی چرخه حیات برای کانتینرها.
+Core lifecycle operations:
+- `container_manager_create`: Creates a container but does not start it (state: CREATED).
+- `container_manager_run`: Creates and immediately starts a container (state: RUNNING).
+- `container_manager_start`: Starts a previously stopped container.
+- `container_manager_stop`: Stops a running container (state: STOPPED).
+- `container_manager_destroy`: Removes a container and cleans up resources (state: DESTROYED).
 
-**توضیحات:**
-- `container_manager_create`: کانتینر را ایجاد می‌کند اما اجرا نمی‌کند (state: CREATED)
-- `container_manager_run`: کانتینر را ایجاد و بلافاصله اجرا می‌کند (state: RUNNING)
-- `container_manager_start`: کانتینر متوقف شده را دوباره اجرا می‌کند
-- `container_manager_stop`: کانتینر در حال اجرا را متوقف می‌کند (state: STOPPED)
-- `container_manager_destroy`: کانتینر را حذف می‌کند (state: DESTROYED)
+### Container Operations
 
-### عملیات کانتینر
-
-```c++
+```cpp
 int container_manager_exec(container_manager_t *cm, const char *container_id, char **command, int argc);
 container_info_t **container_manager_list(container_manager_t *cm, int *count);
 container_info_t *container_manager_get_info(container_manager_t *cm, const char *container_id);
 ```
 
-دستورات را در کانتینرها اجرا کرده و اطلاعات کانتینر را دریافت کنید.
-
-<div style="page-break-after: always;"></div>
+Execute commands inside containers and query container information.
 
 
-## مدیریت namespace ها 
 
-### پیکربندی
 
-```c++
+## Namespace Management
+
+### Configuration
+
+```cpp
 void namespace_config_init(namespace_config_t *config);
 ```
 
-تنظیمات فضای نام را پیکربندی کنید.
+Initializes the namespace configuration.
 
-### ایجاد فرایند
+### Process Creation
 
-```c++
+```cpp
 pid_t namespace_clone_process(int flags, void *child_stack, int stack_size,
                              void (*child_func)(void *), void *arg);
 int namespace_setup_isolation(const namespace_config_t *config);
 ```
 
-فرایندهای ایزوله ایجاد کرده و ایزولاسیون فضای نام را تنظیم کنید.
+Creates isolated processes and sets up namespace isolation.
 
-### عملیات های namespace 
+### Namespace Operations
 
-```c++
+```cpp
 int namespace_join(pid_t target_pid, int ns_type);
 pid_t namespace_create_container(const namespace_config_t *config,
                                char **command, int argc);
 ```
 
-به فضای نام‌های موجود بپیوندید و فرایندهای کانتینر ایجاد کنید.
+Join existing namespaces and create container processes.
 
-## مدیریت منابع (resource manager)
+## Resource Management (Resource Manager)
 
-### مقداردهی اولیه
+### Initialization
 
-```c++
+```cpp
 int resource_manager_init(resource_manager_t *rm, const char *base_path);
 void resource_limits_init(resource_limits_t *limits);
 ```
 
-مدیریت منابع را مقداردهی کرده و محدودیت‌های پیش‌فرض را تنظیم کنید.
+Initializes the resource manager and sets default limits.
 
-### عملیات Cgroup
+### Cgroup Operations
 
-```c++
+```cpp
 int resource_manager_create_cgroup(resource_manager_t *rm, const char *container_id,
                                   const resource_limits_t *limits);
 int resource_manager_add_process(resource_manager_t *rm, const char *container_id, pid_t pid);
@@ -98,53 +96,51 @@ int resource_manager_remove_process(resource_manager_t *rm, const char *containe
 int resource_manager_destroy_cgroup(resource_manager_t *rm, const char *container_id);
 ```
 
-گروه‌های کنترل را برای کنترل منابع مدیریت کنید.
+Manage control groups (cgroups) for resource isolation.
 
-<div style="page-break-after: always;"></div>
+### Statistics
 
-### آمار
-
-```c++
+```cpp
 int resource_manager_get_stats(resource_manager_t *rm, const char *container_id,
                               unsigned long *cpu_usage, unsigned long *memory_usage);
 ```
 
-آمار استفاده از منابع را دریافت کنید.
+Retrieves CPU and memory usage statistics.
 
-## مدیریت فایل‌سیستم (file system manager)
+## Filesystem Management (Filesystem Manager)
 
-### پیکربندی
+### Configuration
 
-```c++
+```cpp
 void fs_config_init(fs_config_t *config);
 ```
 
-پیکربندی فایل‌سیستم را مقداردهی کنید.
+Initializes filesystem configuration.
 
-### عملیات فایل‌سیستم ریشه
+### Root Filesystem Operations
 
-```c++
+```cpp
 int fs_create_minimal_root(const char *root_path);
 int fs_populate_container_root(const char *root_path, const char *host_root);
 int fs_cleanup_container_root(const char *root_path);
 ```
 
-فایل‌سیستم‌های ریشه کانتینر را ایجاد و مدیریت کنید.
+Create and manage container root filesystems.
 
-### روش‌های ایزولاسیون
+### Isolation Methods
 
-```c++
+```cpp
 int fs_setup_pivot_root(const char *new_root, const char *put_old);
 int fs_mount_container_filesystems(const char *root_path);
 ```
 
-ایزولاسیون فایل‌سیستم را با استفاده از pivot_root تنظیم کنید. `pivot_root` روش مدرن‌تر و امن‌تر برای ایزوله کردن فایل‌سیستم است که امکان unmount کردن root قدیمی را فراهم می‌کند.
+Sets up filesystem isolation using pivot_root. `pivot_root` is the recommended and more secure approach because it allows unmounting the old root.
 
-## ساختارهای داده
+## Data Structures
 
-### پیکربندی کانتینر
+### Container Configuration
 
-```c++
+```cpp
 typedef struct {
     char *id;
     char *root_path;
@@ -156,13 +152,11 @@ typedef struct {
 } container_config_t;
 ```
 
-پیکربندی کانتینر شامل تمام تنظیمات ایزولاسیون.
+Container configuration including all isolation settings.
 
-<div style="page-break-after: always;"></div>
+### Resource Limits
 
-### محدودیت‌های منابع
-
-```c++
+```cpp
 typedef struct {
     struct {
         int shares;
@@ -177,11 +171,11 @@ typedef struct {
 } resource_limits_t;
 ```
 
-محدودیت‌های منابع CPU و حافظه.
+CPU and memory resource limits.
 
-### اطلاعات کانتینر
+### Container Information
 
-```c++
+```cpp
 typedef struct {
     char *id;
     pid_t pid;
@@ -189,28 +183,26 @@ typedef struct {
     time_t created_at;
     time_t started_at;
     time_t stopped_at;
-    container_config_t *saved_config;  // ذخیره config برای restart
+    container_config_t *saved_config;  // saved config for restart
 } container_info_t;
 ```
 
-اطلاعات زمان اجرا درباره کانتینرها.
+Runtime information about containers.
 
-**فیلدها:**
-- `id`: شناسه یکتا کانتینر
-- `pid`: Process ID کانتینر (0 اگر اجرا نشده باشد)
-- `state`: وضعیت فعلی کانتینر (CREATED, RUNNING, STOPPED, DESTROYED)
-- `created_at`: زمان ایجاد کانتینر
-- `started_at`: زمان شروع اجرای کانتینر (0 اگر هرگز اجرا نشده باشد)
-- `stopped_at`: زمان توقف کانتینر (0 اگر متوقف نشده باشد)
-- `saved_config`: پیکربندی ذخیره شده برای امکان restart کانتینر
+Fields:
+- `id`: Unique container identifier.
+- `pid`: Container process ID (0 if not running).
+- `state`: Current state (CREATED, RUNNING, STOPPED, DESTROYED).
+- `created_at`: Creation time.
+- `started_at`: Start time.
+- `stopped_at`: Stop time.
+- `saved_config`: Stored configuration for restarting.
 
-<div style="page-break-after: always;"></div>
+## Enumerations
 
-## مقدار دهی ها و کلاس بندی ها
+### Namespace Types
 
-### مدیریت Namespace
-
-```c++
+```cpp
 enum {
     NS_PID = CLONE_NEWPID,
     NS_MNT = CLONE_NEWNS,
@@ -219,10 +211,9 @@ enum {
 };
 ```
 
+### Container States
 
-### حالت کانتینرها
-
-```c++
+```cpp
 typedef enum {
     CONTAINER_CREATED,
     CONTAINER_RUNNING,
@@ -231,25 +222,23 @@ typedef enum {
 } container_state_t;
 ```
 
-### متدهای فایل سیستم
+### Filesystem Isolation Methods
 
-```c++
+```cpp
 typedef enum {
     FS_PIVOT_ROOT
 } fs_isolation_method_t;
 ```
 
-**نکته:** `FS_PIVOT_ROOT` روش پیشنهادی و استاندارد برای ایزولاسیون فایل‌سیستم است که امنیت و انعطاف‌پذیری بیشتری نسبت به روش‌های قدیمی‌تر دارد.
+Note: `FS_PIVOT_ROOT` is the recommended isolation method for better security and flexibility.
 
-<div style="page-break-after: always;"></div>
+## Web Server API
 
-## API وب سرور (Web Server API)
+The system includes a simple web server for monitoring containers.
 
-سیستم شامل یک وب سرور ساده برای مانیتورینگ کانتینرها از طریق رابط وب است.
+### `SimpleWebServer` Class
 
-### کلاس SimpleWebServer
-
-```c++
+```cpp
 class SimpleWebServer {
 public:
     SimpleWebServer(container_manager_t* cm, int port = 808);
@@ -259,20 +248,15 @@ public:
 };
 ```
 
-### Endpoints HTTP
+### HTTP Endpoints
 
-#### GET `/` یا `/index.html`
-صفحه اصلی مانیتورینگ کانتینرها را برمی‌گرداند. این صفحه شامل:
-- لیست تمام کانتینرهای فعال
-- نمودارهای CPU و Memory برای هر کانتینر
-- به‌روزرسانی خودکار هر 10 ثانیه
-
-**Response:** HTML page
+#### GET `/` or `/index.html`
+Returns the monitoring dashboard HTML.
 
 #### GET `/api/containers`
-لیست تمام کانتینرهای فعال را به صورت JSON برمی‌گرداند.
+Returns a JSON list of containers.
 
-**Response:**
+Response:
 ```json
 {
   "containers": [
@@ -291,21 +275,10 @@ public:
 }
 ```
 
-**فیلدها:**
-- `id`: شناسه کانتینر
-- `pid`: Process ID
-- `state`: وضعیت کانتینر (CREATED, RUNNING, STOPPED, DESTROYED)
-- `cpu_usage`: استفاده CPU به نانوثانیه (فقط برای RUNNING)
-- `cpu_limit`: محدودیت CPU quota_us (فقط برای RUNNING)
-- `cpu_percent`: درصد استفاده CPU (فقط برای RUNNING)
-- `memory_usage`: استفاده حافظه به بایت (فقط برای RUNNING)
-- `memory_limit`: محدودیت حافظه به بایت (فقط برای RUNNING)
-- `memory_percent`: درصد استفاده حافظه (فقط برای RUNNING)
-
 #### GET `/api/system`
-اطلاعات سیستم را به صورت JSON برمی‌گرداند.
+Returns system resource usage.
 
-**Response:**
+Response:
 ```json
 {
   "used_memory": 2147483648,
@@ -314,74 +287,53 @@ public:
 }
 ```
 
-**فیلدها:**
-- `used_memory`: حافظه استفاده شده سیستم (بایت)
-- `total_memory`: کل حافظه سیستم (بایت)
-- `cpu_percent`: درصد استفاده CPU سیستم
+## Signals and Graceful Shutdown
 
-<div style="page-break-after: always;"></div>
-
-## مدیریت Signal و Graceful Shutdown
-
-سیستم از signal handler برای graceful shutdown استفاده می‌کند.
+The system uses a signal handler for graceful shutdown.
 
 ### Signal Handler
 
-```c++
+```cpp
 void signal_handler(int signum);
 ```
 
-**پشتیبانی از Signals:**
-- `SIGINT` (Ctrl+C): توقف همه کانتینرها و خروج از برنامه
-- `SIGTERM`: توقف همه کانتینرها و خروج از برنامه
+Supported signals:
+- `SIGINT` (Ctrl+C)
+- `SIGTERM`
 
-**رفتار:**
-1. همه کانتینرهای RUNNING را با SIGTERM متوقف می‌کند
-2. صبر می‌کند تا processes به صورت graceful terminate شوند
-3. کانتینرهای RUNNING را به حالت STOPPED تغییر می‌دهد
-4. کانتینرهای CREATED را به حالت STOPPED تغییر می‌دهد
-5. اگر process هایی باقی مانده باشند، آنها را با SIGKILL kill می‌کند
-6. state نهایی را ذخیره می‌کند
-7. وب سرور را متوقف می‌کند
-8. منابع را آزاد می‌کند و برنامه را می‌بندد
+Behavior:
+1. Sends SIGTERM to all RUNNING containers.
+2. Waits for processes to terminate gracefully.
+3. Transitions container states to STOPPED.
+4. Sends SIGKILL if any processes remain.
+5. Stops the web server.
+6. Releases resources and exits.
 
-<div style="page-break-after: always;"></div>
+## Test Helpers
 
-## توابع کمکی برای تست
+### Memory and CPU Test
 
-### تست مموری و CPU
-
-```c++
+```cpp
 void run_memory_cpu_test();
 ```
 
-این تابع برای تست سیستم استفاده می‌شود و:
-- 3 کانتینر برای تست مموری ایجاد می‌کند (C1MEM, C2MEM, C3MEM)
-  - C1MEM: 1/16 کل مموری سیستم
-  - C2MEM: 1/8 کل مموری سیستم
-  - C3MEM: 1/4 کل مموری سیستم
-- 3 کانتینر برای تست CPU ایجاد می‌کند (C1CPU, C2CPU, C3CPU)
-  - C1CPU: 1/16 CPU (quota: 6250, period: 100000)
-  - C2CPU: 1/8 CPU (quota: 12500, period: 100000)
-  - C3CPU: 1/4 CPU (quota: 25000, period: 100000)
+Creates test containers for memory and CPU stress tests.
 
-### توابع کمکی سیستم
+### System Helper Functions
 
-```c++
+```cpp
 static unsigned long get_total_system_memory();
 static int get_cpu_count();
 ```
 
-- `get_total_system_memory()`: کل مموری سیستم را به بایت برمی‌گرداند
-- `get_cpu_count()`: تعداد CPU cores را برمی‌گرداند
+- `get_total_system_memory()`: Returns total system memory in bytes.
+- `get_cpu_count()`: Returns CPU core count.
 
-<div style="page-break-after: always;"></div>
+## Examples
 
-## مثال‌های استفاده
+### Create and Run a Container
 
-### ایجاد و اجرای کانتینر
-
-```c++
+```cpp
 container_config_t config;
 namespace_config_init(&config.ns_config);
 resource_limits_init(&config.res_limits);
@@ -401,15 +353,15 @@ if (container_manager_run(&cm, &config) == 0) {
 }
 ```
 
-### دریافت اطلاعات کانتینر
+### Get Container Info
 
-```c++
+```cpp
 container_info_t *info = container_manager_get_info(&cm, "my_container");
 if (info) {
     printf("Container ID: %s\n", info->id);
     printf("State: %d\n", info->state);
     printf("PID: %d\n", info->pid);
-    
+
     if (info->state == CONTAINER_RUNNING) {
         unsigned long cpu_usage = 0, memory_usage = 0;
         resource_manager_get_stats(cm.rm, info->id, &cpu_usage, &memory_usage);
@@ -419,9 +371,9 @@ if (info) {
 }
 ```
 
-### توقف و راه‌اندازی مجدد کانتینر
+### Stop and Restart a Container
 
-```c++
+```cpp
 if (container_manager_stop(&cm, "my_container") == 0) {
     printf("Container stopped\n");
 }
@@ -430,4 +382,3 @@ if (container_manager_start(&cm, "my_container") == 0) {
     printf("Container restarted\n");
 }
 ```
-

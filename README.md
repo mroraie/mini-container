@@ -1,266 +1,176 @@
-# مینی کانتینر (Mini Container)
-				پروژه درس سیستم های عامل ترم 4041 - محمدرضا اورعی
+# Mini Container
+Operating Systems Course Project - Term 4041 - Mohammadreza Oraie
+
 <p align="center">
-  <img src="imgs/mini-continer.png" width="500">
+  <img src="docs/imgs/mini-continer.png" width="500">
 </p>
 
-این پروژه، پروژه‌ی نهایی درس سیستم‌های عامل می‌باشد و یک **پیاده‌سازی ساده از کانتینرها** (شبیه عملکرد Docker) با استفاده از قابلیت‌های هسته‌ی لینوکس ارائه می‌دهد. هدف اصلی پروژه، بررسی و استفاده از مفاهیم کلیدی سیستم‌عامل مانند **ایزولاسیون فرایند، مدیریت منابع و امنیت فایل‌سیستم** است.
-در این پروژه تلاش شده است یک **پیاده‌سازی سبک کانتینر** شبیه‌سازی شود که مفاهیم اصلی سیستم‌عامل را به صورت عملی نشان دهد. این شامل موارد زیر است:
-- ایزولاسیون فرایند
-- مدیریت منابع
-- امنیت فایل‌سیستم
-این سیستم به طور مستقیم با **مکانیزم‌های هسته‌ی لینوکس** تعامل دارد و از **فراخوانی‌های سیستمی و رابط‌های هسته** بهره می‌برد.
-در ادامه، توضیحات کلی پروژه ارائه شده است. برای مشاهده‌ی **ریزجزئیات و نحوه‌ی پیاده‌سازی**، پیشنهاد می‌شود موارد زیر مطالعه شود:
-	- [مستندات API](docs/api.md)
-	- [گزارش فنی](docs/technical_report.md)
-	- [[فایل پروژه در Github]] https://github.com/mroraie/mini-container
+This project is the final assignment for the Operating Systems course, providing a **simple implementation of containers** (similar to Docker) using Linux kernel features. The primary goal is to explore and utilize key OS concepts such as **process isolation, resource management, and filesystem security**.
 
-<div style="page-break-after: always;"></div>
+This **lightweight container implementation** demonstrates core OS concepts in practice, including:
+- Process isolation
+- Resource management
+- Filesystem security
 
-# ساختار کلی ماژول ها
-![[imgs/overciew-1.png]]
-# ویژگی‌های کلیدی
-* **ایزولاسیون فرایند**: استفاده از Linux Namespaces (PID, Mount, UTS, Network, User).
-* **مدیریت منابع**: کنترل میزان مصرف CPU و RAM با استفاده از Cgroups و پیاده سازی آن توسط زبان برنامه نویسی C++.
-* **امنیت فایل‌سیستم**: استفاده از `chroot` (Change Root)برای محدودسازی دسترسی به دایرکتوری ها.
-* **مدیریت چرخه حیات**: قابلیت ایجاد، شروع، توقف و حذف کانتینر. (در این پروژه کانتینر ها به صورت State-Base پیاده سازی شده اند و هر کانتینتر برای Valid بودن و وجود داشتن باید در یکی از این حالت ها باشد.)
+The system interacts directly with **Linux kernel mechanisms**, leveraging **system calls and kernel interfaces**.
 
-![[imgs/states.png]]
-* **رابط کاربری**: دارای خط فرمان (CLI) و رابط گرافیکی ترمینالی (TUI) و نمایش در وب سرور (مانند عملکرد دستور `htop` در لینوکس) می باشد.
-<div style="page-break-after: always;"></div>
+For detailed implementation specifics, please refer to:
+- [API Documentation](docs/api.md)
+- [Technical Report](docs/technical_report.md)
+- [GitHub Repository](https://github.com/mroraie/mini-container)
 
-# معرفی انواع ماژول های این پروژه:
-## ماژول File System (RootFS)
+---
+
+# Module Architecture
+![Architecture Overview](docs/imgs/overciew-1.png)
+
+# Key Features
+* **Process Isolation**: Utilizes Linux Namespaces (PID, Mount, UTS, Network, User).
+* **Resource Management**: Controls CPU and RAM usage via Cgroups, implemented in C++.
+* **Filesystem Security**: Uses `chroot` (Change Root) or `pivot_root` to restrict directory access.
+* **Lifecycle Management**: Supports creating, starting, stopping, and destroying containers. (Implemented as a state-based system).
+
+![Container States](docs/imgs/states.png)
+
+* **User Interface**: Includes a Command Line Interface (CLI) and a Terminal User Interface (TUI) via a web server (similar to `htop` functionality).
+
+---
+
+# Module Overview
+
+## Filesystem Module (RootFS)
 <div style="display:flex; align-items:center; gap:16px;">
-  <img src="imgs/filesys.png" style="width:260px; height:auto;">
-  <div style="direction:rtl; text-align:justify;">
-این ماژول مسئول <strong>ایجاد و مدیریت یک root filesystem مینیمال برای کانتینر</strong> است. هدف اصلی آن فراهم کردن یک محیط فایل‌سیستمی ایزوله و مستقل از سیستم میزبان می‌باشد تا پردازه‌ی داخل کانتینر بتواند بدون دسترسی مستقیم به فایل‌سیستم host اجرا شود.
-
-
-در این ماژول، ابتدا یک <strong>root filesystem حداقلی (rootfs)</strong> ساخته می‌شود که شامل دایرکتوری‌های ضروری و فایل‌های پایه موردنیاز برای اجرای برنامه‌ها است. سپس <strong>device fileهای حیاتی</strong> (مانند <code>/dev/null</code> و <code>/dev/tty</code>) و ساختار استاندارد فایل‌سیستم لینوکس ایجاد می‌شوند.
-
+  <img src="docs/imgs/filesys.png" style="width:260px; height:auto;">
+  <div style="text-align:justify;">
+This module is responsible for <strong>creating and managing a minimal root filesystem for the container</strong>. Its main goal is to provide an isolated filesystem environment independent of the host system, ensuring the process inside the container runs without direct access to the host filesystem.
 <br><br>
-
-در ادامه، <strong>باینری‌ها و فایل‌های حیاتی</strong> موردنیاز (مانند <code>/bin/sh</code> و کتابخانه‌های وابسته) از سیستم میزبان به داخل rootfs کپی می‌شوند تا امکان اجرای دستورات پایه در محیط کانتینر فراهم گردد.
+It constructs a <strong>minimal root filesystem (rootfs)</strong> containing essential directories and base files. Critical <strong>device files</strong> (like <code>/dev/null</code> and <code>/dev/tty</code>) are created along with the standard Linux filesystem structure.
+<br><br>
+<strong>Essential binaries and libraries</strong> (such as <code>/bin/sh</code>) are copied from the host to the rootfs to enable basic command execution within the container.
   </div>
 </div>
 
-پس از آماده‌سازی ساختار فایل‌ها، فایل‌سیستم‌های مجازی و سیستمی شامل:
-
+Virtual and system filesystems including:
 - `proc`
 - `sysfs`
 - `tmpfs`
 - `devtmpfs`
 
-در مسیرهای متناظر داخل rootfs **mount** می‌شوند تا پردازه‌ی داخل کانتینر بتواند به اطلاعات processها، دستگاه‌ها و منابع سیستم دسترسی کنترل‌شده داشته باشد.
+are **mounted** at their respective paths within the rootfs. Using the **<code>chroot</code>** system call, the process enters the new root filesystem, and execution begins in this isolated space.
 
-در مرحله‌ی بعد، با استفاده از فراخوانی سیستمی **`chroot`**، پردازه وارد محیط root filesystem جدید می‌شود و اجرای برنامه‌ها در این فضای ایزوله آغاز می‌گردد.
+At the end of the container lifecycle, this module **unmounts all filesystems** and **cleans up the rootfs environment** to prevent resource leaks.
 
-در پایان چرخه‌ی عمر کانتینر، این ماژول مسئول **Unmount کردن تمام filesystemهای mount شده** و **پاک‌سازی کامل محیط rootfs** است تا از نشت منابع سیستم و باقی ماندن mountهای اضافی جلوگیری شود.
+## Namespace Module
+![Runtime Overview](docs/imgs/runtime-overview.png)
+This module manages **Linux Namespaces**, isolating the container process from the host system at various levels. Using low-level calls like `clone` and `setns`, it provides an independent execution environment.
 
-به طور خلاصه، این ماژول نقش **Filesystem Layer** را در معماری کانتینر ایفا می‌کند و از نظر مفهومی معادل لایه‌ی filesystem در Docker می‌باشد که ایزولاسیون فایل‌سیستمی کانتینر را فراهم می‌سازد.
+A new process is created using **<code>clone</code>**, activating namespaces such as `PID`, `Mount`, `UTS`, `IPC`, and optionally `Network`. This ensures the container has a restricted and independent view of system resources.
 
-<div style="page-break-after: always;"></div>
+It also handles **namespace configuration**, such as mount propagation settings. The module allows **joining existing namespaces** (similar to `docker exec`) for debugging or executing commands in active containers.
 
-## ماژول Namespace
-![[imgs/runtime-overview.png]]
-این ماژول مسئول **ایجاد و مدیریت namespaceهای لینوکس برای کانتینر** است و وظیفه‌ی اصلی آن **ایزوله‌سازی پردازه‌ی کانتینری از سیستم میزبان** در سطوح مختلف سیستم‌عامل می‌باشد. با استفاده از مکانیزم‌های low‑level لینوکس مانند `clone` و `setns`، این ماژول محیط اجرایی مستقلی برای کانتینر فراهم می‌کند.
+## Resource Manager Module (Cgroup)
+![Resource Management](docs/imgs/rescource.png)
+This module manages system resources using **Linux Cgroups**. It controls **CPU and Memory** consumption, preventing a single container from impacting the host or other processes.
 
-در این ماژول، یک پردازه‌ی جدید با استفاده از فراخوانی سیستمی **`clone`** ایجاد می‌شود. هنگام ساخت این پردازه، مجموعه‌ای از namespaceها (مانند `PID`, `Mount`, `UTS`, `IPC` و در صورت نیاز `Network`) فعال می‌گردند تا پردازه‌ی داخل کانتینر دید محدود و مستقلی نسبت به منابع سیستم داشته باشد.
+It automatically detects the **Cgroup version (v1 or v2)** and applies appropriate control paths. Each container gets a **dedicated Cgroup** for CPU and Memory controllers.
 
-پس از ایجاد پردازه، این ماژول وظیفه‌ی **راه‌اندازی و پیکربندی namespaceها** را بر عهده دارد. به‌عنوان مثال، در Mount Namespace، تنظیمات مربوط به mount propagation انجام می‌شود تا mountهای کانتینر به سیستم میزبان نشت نکنند و بالعکس. این مرحله پایه‌ی ایزولاسیون فایل‌سیستمی کانتینر را تشکیل می‌دهد.
+It supports **CPU limits** (`quota`, `period`, `shares`) and **Memory limits** (`limit`, `swap limit`). These are applied by writing directly to Cgroup control files. It also **collects usage statistics** for monitoring.
 
-ماژول Namespace همچنین امکان **پیوستن به namespace یک پردازه‌ی موجود** را از طریق تابعی مبتنی بر `setns` فراهم می‌کند. این قابلیت برای سناریوهایی مانند اجرای دستور داخل یک کانتینر فعال (مشابه `docker exec`) یا دیباگ کردن محیط کانتینری کاربرد دارد.
+---
 
-علاوه بر این، این ماژول قابلیت **یکپارچه‌سازی با cgroup** را نیز دارد؛ به‌طوری‌که پس از ایجاد پردازه‌ی کانتینری، می‌توان آن را به یک cgroup مشخص اضافه کرد تا محدودیت‌هایی مانند مصرف CPU و حافظه اعمال شود.
+# Prerequisites
+* **Linux Kernel**: Version 3.8 or higher.
+* **Compiler**: GCC (g++) with C++11 support.
+* **Privileges**: Root or `sudo` access required for container operations.
+* **Cgroups**: Must be mounted at `/sys/fs/cgroup`.
 
-به طور خلاصه، این ماژول نقش **Isolation Layer** را در معماری کانتینر ایفا می‌کند و مسئول جداسازی پردازه‌ی کانتینر از سیستم میزبان در سطح process، mount و سایر منابع هسته است. از نظر مفهومی، این بخش معادل استفاده‌ی Docker از Linux namespaces برای ایجاد محیط‌های کانتینری ایزوله می‌باشد.
+# Installation
 
-<div style="page-break-after: always;"></div>
-
-## ماژول Resource Manager (Cgroup)
-![[imgs/rescource.png]]
-این ماژول مسئول **مدیریت و محدودسازی منابع سیستم برای کانتینر** با استفاده از **Linux cgroups** است. هدف اصلی آن کنترل مصرف منابعی مانند **CPU و حافظه** توسط پردازه‌ی کانتینری و جلوگیری از تأثیرگذاری آن بر سایر پردازه‌های سیستم میزبان می‌باشد.
-
-در این ماژول، ابتدا **نسخه‌ی cgroup سیستم (v1 یا v2)** به‌صورت خودکار شناسایی می‌شود تا پیاده‌سازی بتواند با پیکربندی‌های مختلف کرنل لینوکس سازگار باشد. بر اساس نسخه‌ی تشخیص داده‌شده، مسیرها و فایل‌های کنترلی مناسب برای اعمال محدودیت‌ها انتخاب می‌شوند.
-پس از شناسایی نسخه، برای هر کانتینر یک **cgroup اختصاصی** ایجاد می‌شود. این cgroup به‌صورت مجزا برای کنترلرهای CPU و Memory (و در cgroup v1 به‌صورت زیرسیستم‌های جداگانه) ساخته شده و آماده‌ی اعمال سیاست‌های محدودسازی می‌گردد.
-
-در ادامه، این ماژول امکان **اعمال محدودیت‌های CPU** (مانند `quota`, `period` و `shares`) و **محدودیت‌های حافظه** (مانند `memory limit` و `swap limit`) را فراهم می‌کند. این محدودیت‌ها با نوشتن مستقیم در فایل‌های کنترلی cgroup اعمال می‌شوند و باعث می‌شوند مصرف منابع کانتینر از مقادیر تعیین‌شده فراتر نرود. پس از ایجاد پردازه‌ی کانتینری، ماژول Resource Manager وظیفه‌ی **افزودن پردازه و تمام threadهای آن به cgroup مربوطه** را بر عهده دارد. این کار تضمین می‌کند که تمام execution contextهای کانتینر تحت محدودیت‌های تعریف‌شده قرار بگیرند. این مرحله معمولاً از طریق یک callback و بلافاصله پس از ایجاد process انجام می‌شود.
-
-علاوه بر اعمال محدودیت‌ها، این ماژول قابلیت **جمع‌آوری آمار مصرف منابع** را نیز فراهم می‌کند. اطلاعاتی مانند:
-- میزان مصرف CPU
-- میزان حافظه‌ی استفاده‌شده
-از فایل‌های آماری cgroup خوانده شده و برای مانیتورینگ یا مدیریت چرخه‌ی عمر کانتینر استفاده می‌شوند.
-
-در پایان، پس از خاتمه‌ی اجرای کانتینر، این ماژول مسئول **حذف cgroupهای ایجادشده و پاک‌سازی منابع** است تا از باقی ماندن تنظیمات و مصرف منابع غیرضروری در سیستم جلوگیری شود.
-
-به طور خلاصه، این ماژول نقش **Resource Control Layer** را در معماری کانتینر ایفا می‌کند و از نظر مفهومی معادل استفاده‌ی Docker از **cgroups** برای اعمال محدودیت و مانیتورینگ منابع کانتینرها می‌باشد.
-<div style="page-break-after: always;"></div>
-# پیش‌نیازها برای اجرا
-* **هسته لینوکس**: نسخه ۳.۸ یا بالاتر.
-* **کامپایلر**: GCC (g++) با پشتیبانی از C++11.
-* **دسترسی**: اجرای دستورات با سطح دسترسی `root` یا `sudo`.
-* **تقسیم منابع با Cgroups**: باید در مسیر `/sys/fs/cgroup` مونت شده باشد.
-
-# نصب و راه‌اندازی
-
-کامپایل پروژه:
+Compile the project:
 ```bash
 git clone https://github.com/mroraie/mini-container.git
 cd mini-container
 make clean
 make
-./mini-container
 ```
 
-# نحوه استفاده
+# Usage
 
-### 1) رابط گرافیکی ترمینال
-
-برای تجربه بصری مدیریت کانتینرها:
-
+### 1) Terminal GUI (Web Monitor)
+Run the web server to monitor containers via a browser:
 ```bash
-./mini-container-ui
-
+./mini-container-web
 ```
-### 2) دستورات خط فرمان (CLI)
-* **اجرای یک دستور ساده در کانتینر:** اجرای این دستور ساده مصرف cpu و ram بسیار کمی دارد و اصلا مشخص نمی کند که سیستم در چه وضعیتی هست، اجرای این دستور جهت بررسی صحیح بودن نصب پروژه می باشد.
-`./mini-container run /bin/echo "Hello World"`
-* **اجرا با محدودیت منابع:**
-`./mini-container run --memory 128 --cpu 512 /bin/sh`
-در این مثال از تمام فضای حافظه ای که داریم 128 مگابایت به این برانه و این دستور اختصاص داده ایم و از کل 1024 توان پردازشی سیستم خود، 528 قسمت یعنی چیزی حدود نیمی از یک هسته کامل را برای اجرای این برنامه اختصاص داده ایم.
-* **مشاهده وضعیت:**
-`./mini-container list`
-`./mini-container info <container_id>`
-با زدن این دستورات در ترمینال می توان وضعیت هر کانتینر و اطلاعات مربوط به تمام کانتینر ها را مشاهده کرد.
-* **توقف و حذف:**
-`./mini-container stop <container_id>`
-`./mini-container destroy <container_id>`
 
-### 3) نمایش در وب سرور
+### 2) CLI Commands
+* **Run a simple command:**
+  `./mini-container run /bin/echo "Hello World"`
+* **Run with resource limits:**
+  `./mini-container run --memory 128 --cpu 512 /bin/sh`
+  *(Allocates 128MB RAM and 512 CPU shares (~half a core)).*
+* **List containers:**
+  `./mini-container list`
+* **Container info:**
+  `./mini-container info <container_id>`
+* **Stop and Destroy:**
+  `./mini-container stop <container_id>`
+  `./mini-container destroy <container_id>`
 
+---
 
+# Summary of Concepts
 
-<div style="page-break-after: always;"></div>
+### 1. Linux Namespaces
+Makes the process believe it is the only one on the system:
+* **PID**: Isolated process tree.
+* **Mount**: Isolated filesystem mount points.
+* **UTS**: Independent hostname.
+* **Network**: Independent network stack.
 
-# جمع بندی نهایی پروژه
-### ۱. Linux Namespaces
-این تکنولوژی باعث می‌شود فرایند داخل کانتینر فکر کند سیستم کاملاً متعلق به خودش می باشد و کانتینر دیگری در حال اجرا نمی باشد:
-* **PID**: فرایندها فقط خودشان را می‌بینند.
-* **Mount**: فایل‌سیستم ایزوله.
-* **UTS**: نام میزبان (Hostname) جداگانه.
-* **Network**: کارت شبکه مجازی مستقل.
+### 2. Control Groups (Cgroups)
+Prevents resource exhaustion:
+* **CPU**: Processing time allocation.
+* **Memory**: RAM and Swap limits.
 
-### ۲. Control Groups (Cgroups)
-برای جلوگیری از مصرف تمام منابع سیستم توسط یک کانتینر:
+### 3. System Calls
+* `clone()`: Create process with specific namespaces.
+* `unshare()`: Disassociate parts of the process context.
+* `mount()` & `chroot()`: Directory isolation.
 
-* **CPU**: تعیین سهمیه پردازش.
-* **Memory**: تعیین سقف مصرف رم و Swap.
+---
 
-### ۳. فراخوانی‌های سیستمی (System Calls)
-* `clone()`: برای ایجاد فرایند جدید با فضاهای نام مشخص.
-* `unshare()`: برای جدا کردن بخش‌های مشترک فرایند.
-* `mount()` و `chroot()`: برای ایزولاسیون دایرکتوری‌ها.
+# Comparison: Mini Container vs Docker
 
-
-# مقایسه مینی کانتینر با داکر (Docker)
-برای ساخت این پروژه از داکر الهام گرفته شده است و در طراحی و پیاده سازی سعی شده است که مفاهیم اولیه ای از داکر در این پروژه استفاده شود:
-
-| ویژگی | مینی کانتینر | Docker |
+| Feature | Mini Container | Docker |
 | --- | --- | --- |
-| **ایزولاسیون** | فضای نام هسته (Namespace) | فضای نام + لایه‌های امنیتی اضافی |
-| **مدیریت منابع** | cgroups ساده | cgroups پیشرفته + سهمیه‌بندی دقیق |
-| **فایل‌سیستم** | chroot ساده | سیستم لایه‌ای (OverlayFS) |
-| **شبکه** | فضای نام پایه | پل‌های مجازی (Bridge) و شبکه پیچیده |
-| **پیچیدگی** | بسیار کم (آموزشی) | بالا (صنعتی) |
+| **Isolation** | Kernel Namespaces | Namespaces + Extra Security Layers |
+| **Resource Mgmt** | Basic Cgroups | Advanced Cgroups + Quotas |
+| **Filesystem** | Simple chroot/pivot_root | Layered System (OverlayFS) |
+| **Networking** | Basic Namespace | Complex Virtual Bridges |
+| **Complexity** | Low (Educational) | High (Production Grade) |
 
-<div style="page-break-after: always;"></div>
+---
 
-# تست‌های عملکرد
+# Performance Tests
 
-برای اطمینان از ایزولاسیون، می‌توانید تست‌های زیر را داخل کانتینر اجرا کنید:
+To verify isolation, run these tests inside a container:
 
-* **تست فشار CPU:**
-این دستور بدون هیچ محدودیت ای کل توان cpu را برای خودش در نظر می گیرد و امکان کرش شدن سرور در این حالت وجود دارد:
-```
+* **CPU Stress Test:**
+```bash
+# Unlimited (Caution: might crash host)
 ./mini-container run sh -c 'while true; do :; done'
-```
 
-```
-taskset -c 1 sh -c 'while true; do :; done'
-```
-اما این دستور کل توان را به cpu نمی دهد بلکه فقط 1/4 توان یک هسته را در اختیار اجرای این برنامه قرار می دهد:
-```
+# Limited to 1/4 of a core
 ./mini-container run --cpu 256 sh -c 'while true; do :; done'
-
-```
-بعضی دستورات پیشرفته تر برای تست عملکرد cpu: 
-
-```
-./mini-container run --cpu 512 sh -c 'while true; do echo $((12345*67890)) > /dev/null; done'
 ```
 
-
-* **تست محدودیت حافظه:**
-`dd if=/dev/zero of=/tmp/mem bs=1M count=80`
-
-
-دستور برای اختصاص دادن 256 مگ از فضای حافظه:
-```
-./mini-container run --memory 300 sh -c '
-x="";
-for i in $(seq 1 256); do
-  x="$x$(head -c 1M /dev/zero)";
-  sleep 0.12;
-done;
-sleep infinity
-'
+* **Memory Limit Test:**
+```bash
+# Allocate 256MB gradually in a 300MB limit container
+./mini-container run --memory 300 sh -c 'x=""; for i in $(seq 1 256); do x="$x$(head -c 1M /dev/zero)"; sleep 0.12; done; sleep infinity'
 ```
 
-
-
-sh -c 'a=(); while true; do a+=("$(head -c 10M /dev/zero)"); sleep 0.1; done'
-
-
-
-
-
-دستور برای گرفتن تمام فضای حافظه رم (در این تست 2 گیگ می باشد.)، اما محدود به 1 گیگ و کرش کردن دستور در انتهای آن برای جلو گیری از مصرف تمام فضای مموری: 
-
-
-```
-./mini-container run --memory 1024 sh -c '
-x="";
-for i in $(seq 1 2048); do
-  x="$x$(head -c 1M /dev/zero)";
-  sleep 0.0147;
-done;
-sleep infinity
-'
-```
-
-
-* دستوراات ترکیبی رم و مموری (این دستور یک **تست ترکیبی CPU و RAM** هست و می‌شه گفت “stress test” کانتینره) :
-* 
-```
+* **Combined Stress Test:**
+```bash
 ./mini-container run --memory 200 --cpu 256 sh -c 'a=""; while true; do a="$a$(printf %0100000d 0)"; done'
 ```
-
-<div style="page-break-after: always;"></div>
-
-# فضای اجرا
-
-اجرای ساده ترین تست cpu:
-![[imgs/run1.png]]
-
-مشاهده مصرف منابع: 
-![[imgs/run2.png]]
-
-
-اضافه کردن یک کانتینر دیگر به برنامه
-![[imgs/run3.png]]
-
-مشاهده مصرف منابع: 
-![[imgs/run4.png]]
-
-

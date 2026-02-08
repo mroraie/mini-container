@@ -1,183 +1,183 @@
-# سیستم مینی کانتینر - گزارش فنی
+# Mini Container System - Technical Report
 
-## ۱. مقدمه
+## 1. Introduction
 
-این گزارش فنی پیاده‌سازی سیستم مینی کانتینر مشابه داکر را توصیف می‌کند که به عنوان پروژه درس سیستم‌عامل طراحی شده است. سیستم از C به C++ تبدیل شده و مفاهیم اصلی سیستم‌عامل شامل ایزولاسیون فرایند، مدیریت منابع هسته و فراخوانی‌های سیستمی را نشان می‌دهد، در حالی که روش‌های برنامه‌نویسی مدرن C++ را به نمایش می‌گذارد.
+This technical report describes the implementation of the Mini Container system, a Docker-like environment designed as an Operating Systems course project. The system has been transitioned from C to C++, demonstrating core OS concepts including process isolation, kernel resource management, and system calls, while utilizing modern C++ programming practices.
 
-## ۲. معماری سیستم
+## 2. System Architecture
 
-سیستم به کامپوننت‌های مدولار سازماندهی شده است که هر کدام جنبه خاصی از کانتینری‌سازی را مدیریت می‌کنند. پیاده‌سازی C++ API سازگار با C را برای عملیات سطح سیستم حفظ می‌کند در حالی که ویژگی‌های مدرن C++ را برای بهبود مدیریت حافظه و ایمنی کد معرفی می‌کند.
+The system is organized into modular components, each managing a specific aspect of containerization. The C++ implementation maintains a C-compatible API for system-level operations while introducing modern C++ features for improved memory management and code safety.
 
-### ۲.۱ کامپوننت‌های اصلی
+### 2.1 Core Components
 
-- **مدیریت‌کننده کانتینر**: عملیات چرخه حیات کانتینر را هماهنگ می‌کند
-- **مدیریت‌کننده فضای نام**: فضای نام لینوکس را برای ایزولاسیون فرایند مدیریت می‌کند
-- **مدیریت‌کننده منابع**: محدودیت‌های CPU و حافظه را با استفاده از cgroups کنترل می‌کند
-- **مدیریت‌کننده فایل‌سیستم**: ایزولاسیون فایل‌سیستم را از طریق pivot_root فراهم می‌کند
-- **رابط CLI**: رابط خط فرمان برای تعامل کاربر
-- **وب سرور**: رابط وب برای مانیتورینگ کانتینرها
+- **Container Manager**: Coordinates container lifecycle operations.
+- **Namespace Handler**: Manages Linux namespaces for process isolation.
+- **Resource Manager**: Controls CPU and memory limits using cgroups.
+- **Filesystem Manager**: Provides filesystem isolation via pivot_root.
+- **CLI Interface**: Command-line interface for user interaction.
+- **Web Server**: Web interface for container monitoring.
 
-### ۲.۲ تعامل کامپوننت‌ها
+### 2.2 Component Interaction
 
 ```
-رابط CLI
+CLI Interface
     ↓
-مدیریت‌کننده کانتینر ←→ مدیریت‌کننده منابع
-    ↓              ←→ مدیریت‌کننده فایل‌سیستم
-مدیریت‌کننده فضای نام
+Container Manager ←→ Resource Manager
+    ↓               ←→ Filesystem Manager
+Namespace Handler
 ```
 
 <div style="page-break-after: always;"></div>
 
-## ۳.ایزولاسیون فرایند
+## 3. Process Isolation
 
-### ۳.۱ مفاهیم فضای نام
+### 3.1 Namespace Concepts
 
-- **فضای نام (namespace) PID**: شناسه فرایندها را ایزوله می‌کند و به هر کانتینر درخت فرایند خود را از PID 1 می‌دهد
-- **فضای نام (namespace) Mount**: نقاط mount فایل‌سیستم را ایزوله می‌کند و امکان جداول mount خصوصی را می‌دهد
-- **فضای نام (namespace) Network**: رابط‌های شبکه، جداول مسیریابی و قوانین فایروال را ایزوله می‌کند
-- **فضای نام (namespace) User**: نگاشت‌های شناسه کاربر و گروه را ایزوله می‌کند
+- **PID Namespace**: Isolates process IDs, giving each container its own process tree starting from PID 1.
+- **Mount Namespace**: Isolates filesystem mount points, allowing for private mount tables.
+- **Network Namespace**: Isolates network interfaces, routing tables, and firewall rules.
+- **User Namespace**: Isolates user and group ID mappings.
 
-### ۳.۲ جزئیات پیاده‌سازی
+### 3.2 Implementation Details
 
-مدیریت‌کننده فضای نام از فراخوانی سیستمی `clone()` با پرچم‌های فضای نام استفاده می‌کند:
+The Namespace Handler uses the `clone()` system call with namespace flags:
 
 ```cpp
 pid_t pid = clone(child_func, stack, CLONE_NEWPID | CLONE_NEWNS, args);
 ```
 
-جنبه‌های کلیدی پیاده‌سازی:
-- **تخصیص پشته**: فرایندهای فرزند نیاز به فضای پشته خود دارند
-- **تنظیم فضای نام**: تابع فرزند ایزولاسیون را پس از ایجاد فضای نام پیکربندی می‌کند
-- **فضای نام PID**: ایزولاسیون شناسه فرایند از PID 1 فراهم می‌کند
-- **فضای نام Mount**: امکان نمایش‌های خصوصی فایل‌سیستم را می‌دهد
+Key implementation aspects:
+- **Stack Allocation**: Child processes require their own stack space.
+- **Namespace Setup**: The child function configures isolation after namespace creation.
+- **PID Namespace**: Provides process ID isolation starting from PID 1.
+- **Mount Namespace**: Enables private filesystem views.
 
-### ۳.۳ پیوستن به فضای نام
+### 3.3 Joining Namespaces
 
-برای اجرای دستورات در کانتینرهای موجود، سیستم به فضای نام موجود می‌پیوندد:
+To execute commands in existing containers, the system joins the existing namespace:
 
-```c
+```cpp
 int namespace_join(pid_t target_pid, int ns_type) {
+    // Implementation details for setns()
 }
 ```
 
 <div style="page-break-after: always;"></div>
 
-## ۴. گروه‌های کنترل (cgroups) - مدیریت منابع
+## 4. Control Groups (cgroups) - Resource Management
 
-### ۴.۱ مفاهیم Cgroup
+### 4.1 Cgroup Concepts
 
-گروه‌های کنترل محدودیت‌های سلسله مراتبی منابع و حسابداری فراهم می‌کنند:
+Control Groups provide hierarchical resource limits and accounting:
 
-- **کنترل CPU**: استفاده از CPU را از طریق shares و quotas محدود می‌کند
-- **کنترل حافظه**: استفاده از حافظه را با محدودیت‌های سخت و کنترل swap محدود می‌کند
-- **سلسله مراتب**: ساختار درختی امکان کنترل منابع تو در تو را می‌دهد
-- **حسابداری**: استفاده از منابع را برای هر گروه ردیابی می‌کند
+- **CPU Control**: Limits CPU usage via shares and quotas.
+- **Memory Control**: Restricts memory usage with hard limits and swap control.
+- **Hierarchy**: Tree structure allows for nested resource control.
+- **Accounting**: Tracks resource usage for each group.
 
-### ۴.۲ جزئیات پیاده‌سازی
+### 4.2 Implementation Details
 
-مدیریت‌کننده منابع با فایل‌سیستم `/sys/fs/cgroup` تعامل می‌کند:
+The Resource Manager interacts with the `/sys/fs/cgroup` filesystem:
 
-```c
-// create cgroup
+```cpp
+// Create cgroup
 mkdir("/sys/fs/cgroup/cpu/mini_container/container_id", 0755);
 
-// setup CPU shares
+// Setup CPU shares
 FILE *fp = fopen("/sys/fs/cgroup/cpu/mini_container/container_id/cpu.shares", "w");
 fprintf(fp, "%d\n", shares);
 
-// add process to cgroup
+// Add process to cgroup
 fp = fopen("/sys/fs/cgroup/cpu/mini_container/container_id/tasks", "w");
 fprintf(fp, "%d\n", pid);
 ```
 
-### ۴.۳ محدودیت‌های منابع
+### 4.3 Resource Limits
 
-- **CPU Shares**: وزن نسبی برای زمان‌بندی CPU (پیش‌فرض: ۱۰۲۴)
-- **CPU Quota**: محدودیت‌های مطلق زمان CPU (میکروثانیه در هر دوره)
-- **محدودیت‌های حافظه**: محدودیت‌های سخت حافظه به بایت
-- **محدودیت‌های Swap**: کنترل فضای swap
+- **CPU Shares**: Relative weight for CPU scheduling (default: 1024).
+- **CPU Quota**: Absolute CPU time limits (microseconds per period).
+- **Memory Limits**: Hard memory limits in bytes.
+- **Swap Limits**: Control over swap space usage.
 
 <div style="page-break-after: always;"></div>
 
-## ۵. ایزولاسیون فایل‌سیستم
+## 5. Filesystem Isolation
 
-### ۵.۱ Pivot Root
+### 5.1 Pivot Root
 
-سیستم از `pivot_root()` برای ایزولاسیون فایل‌سیستم استفاده می‌کند که روش مدرن‌تر و امن‌تر است:
+The system uses `pivot_root()` for filesystem isolation, which is a modern and secure method:
 
-- **pivot_root()**: امکان unmount کردن فایل‌سیستم ریشه قدیمی را می‌دهد
-- **امنیت بیشتر**: نسبت به chroot امن‌تر است
-- **کنترل بهتر**: امکان مدیریت کامل فایل‌سیستم ریشه
+- **pivot_root()**: Allows unmounting the old root filesystem.
+- **Enhanced Security**: More secure than chroot.
+- **Better Control**: Enables full management of the root filesystem.
 
-### ۵.۲ پیاده‌سازی
+### 5.2 Implementation
 
-```c
+```cpp
 int fs_setup_pivot_root(const char *new_root, const char *put_old) {
-    // mount new root
+    // Mount new root
     mount(new_root, new_root, "bind", MS_BIND | MS_REC, NULL);
     
-    // create put_old directory
+    // Create put_old directory
     mkdir(put_old, 0755);
     
-    // pivot root
+    // Pivot root
     syscall(SYS_pivot_root, new_root, put_old);
     
-    // change to new root
+    // Change to new root
     chdir("/");
     
-    // unmount old root
+    // Unmount old root
     umount2(put_old, MNT_DETACH);
     rmdir(put_old);
 }
 ```
 
-### ۵.۳ ایجاد فایل‌سیستم ریشه
+### 5.3 Root Filesystem Creation
 
-سیستم فایل‌سیستم‌های ریشه کانتینر حداقل ایجاد می‌کند:
+The system creates minimal container root filesystems:
 
-- دایرکتوری‌های ضروری: `/bin`, `/lib`, `/proc`, `/sys`, `/dev`
-- گره‌های دستگاه: `/dev/null`, `/dev/zero`, `/dev/random`
-- فایل‌های پیکربندی پایه: `/etc/passwd`, `/etc/group`
+- Essential directories: `/bin`, `/lib`, `/proc`, `/sys`, `/dev`
+- Device nodes: `/dev/null`, `/dev/zero`, `/dev/random`
+- Base configuration files: `/etc/passwd`, `/etc/group`
 
 <div style="page-break-after: always;"></div>
 
-## ۶. فراخوانی‌های سیستمی و تعامل با هسته
+## 6. System Calls and Kernel Interaction
 
-### ۶.۱ فراخوانی‌های سیستمی اصلی
+### 6.1 Core System Calls
 
-- **clone()**: فرایندهای جدید را در فضای نام ایجاد می‌کند
-- **unshare()**: فرایندهای موجود را به فضای نام جدید منتقل می‌کند
-- **pivot_root()**: تعویض ریشه پیشرفته و امن
-- **mount()**: عملیات mount فایل‌سیستم
+- **clone()**: Creates new processes within namespaces.
+- **unshare()**: Moves existing processes to new namespaces.
+- **pivot_root()**: Advanced and secure root switching.
+- **mount()**: Filesystem mount operations.
 
-### ۶.۲ رابط مستقیم هسته
+### 6.2 Direct Kernel Interface
 
-بر خلاف داکر، این سیستم به طور مستقیم با موارد زیر تعامل می‌کند:
-- `/sys/fs/cgroup` برای مدیریت منابع
-- `/proc/<pid>/ns/` برای عملیات فضای نام
-- فراخوانی‌های سیستمی بدون تجرید سطح بالا
+Unlike Docker, this system interacts directly with:
+- `/sys/fs/cgroup` for resource management.
+- `/proc/<pid>/ns/` for namespace operations.
+- System calls without high-level abstractions.
 
-## ۷. مدیریت چرخه حیات کانتینر
+## 7. Container Lifecycle Management
 
-### ۷.۱ وضعیت‌های کانتینر
+### 7.1 Container States
 
-- **CREATED**: کانتینر تعریف شده اما در حال اجرا نیست
-- **RUNNING**: فرایند کانتینر فعال است
-- **STOPPED**: فرایند کانتینر خاتمه یافته
-- **DESTROYED**: منابع کانتینر پاکسازی شده
+- **CREATED**: Container defined but not running.
+- **RUNNING**: Container process is active.
+- **STOPPED**: Container process has terminated.
+- **DESTROYED**: Container resources have been cleaned up.
 
-### ۷.۲ عملیات چرخه حیات
+### 7.2 Lifecycle Operations
 
-- **Create**: تنظیم cgroups، فضای نام، فایل‌سیستم
-- **Run**: ایجاد و راه‌اندازی بلافاصله کانتینر (Create + Start)
-- **Start**: راه‌اندازی فرایند کانتینر با ایزولاسیون (برای کانتینرهای متوقف شده)
-- **Stop**: خاتمه فرایند کانتینر به طور graceful
-- **Destroy**: پاکسازی همه منابع
+- **Create**: Setup cgroups, namespaces, and filesystem.
+- **Run**: Immediate container creation and startup (Create + Start).
+- **Start**: Launches container process with isolation (for stopped containers).
+- **Stop**: Gracefully terminates the container process.
+- **Destroy**: Cleans up all resources.
 
-### ۷.۳ ذخیره‌سازی پیکربندی
+### 7.3 Configuration Persistence
 
-سیستم پیکربندی کانتینرها را ذخیره می‌کند تا امکان restart کانتینرهای متوقف شده فراهم شود:
-- **saved_config**: پیکربندی کامل کانتینر در `container_info_t` ذخیره می‌شود
-- **Restart**: کانتینرهای متوقف شده می‌توانند با همان پیکربندی قبلی دوباره راه‌اندازی شوند
-
+The system saves container configurations to allow restarting stopped containers:
+- **saved_config**: Full container configuration is stored in `container_info_t`.
+- **Restart**: Stopped containers can be relaunched with their original configuration.
